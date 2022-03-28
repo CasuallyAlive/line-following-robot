@@ -1,3 +1,4 @@
 classdef SLAM_Controller
-    
-end
+    properties
+    end
+end 
