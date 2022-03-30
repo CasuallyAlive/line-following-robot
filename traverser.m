@@ -5,21 +5,19 @@ clear; clc; close all; % initialization
 r = MKR_MotorCarrier; %connect to MKR
 
 %% Main loop for SLAM traversal
-controller = SLAM_Controller;
+controller = SLAM_Controller(null, r);
 
+start_robot = false;
 while(1)
-    switch(controller.state)
-        case SLAM_Controller.FollowLineForward
-            break;
-        case SLAM_Controller.Fork
-            break;
-        case SLAM_Controller.GraspItem
-            break;
-        case SLAM_Controller.TurnAround
-            break;
-        case SLAM_Controller.UnGraspItem
-            break;
-        case SLAM_Controller.BeFree
-            break;
+    if(not(start_robot))
+        if(input("Enter 'start' to initiate the map traversal.\n","s") == "start")
+            start_robot = true;
+        end
+        continue;
     end
+    if(start_robot && input("\n", "s") == "abort")
+        fprintf("Traversal was aborted!");
+        break;
+    end
+    x,y = controller.do_task();
 end
