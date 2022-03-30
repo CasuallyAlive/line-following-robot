@@ -30,21 +30,21 @@ classdef MKR_MotorCarrier < handle
     % Dr. Jacob A. George
     % Dr. Daniel Drew
     % University of Utah, Electrical and Computer Engineering, 2021
-    
+
     properties
         u; robotIP; robotPORT; ready; sizeofBuffer; tempSignal; tempData;...
             analogSensorBuffer; newAnalogIndex; imuSensorBuffer; newImuIndex;...
             count; plotToggle; analogPlotBuffer; imuPlotBuffer; plotDelay;...
-            plotDelayMax; available_streams; streamToDraw; digitalBuffer;...
-            drFlag; digitalPinsAvailable; a1; a2; a3; a4; i1; i2; i3;...
+            plotDelayMax; available_streams; streamToDraw; digitalPinBuffer; analogPinBuffer;...
+            digitalPinsAvailable; analogPinsAvailable; a1; a2; a3; a4; i1; i2; i3;...
             animation_t; graphBuffer; sizeOfRecordedDataBuffer; RecordedDataBuffer;...
-            RDB_Toggle; RDB_Index; channelToDraw; ultrasonicBuffer;
-        
+            RDB_Toggle; RDB_Index; channelToDraw; red; green; blue; irBuffer; encoderPos; encoderVel;
+
     end
-    
+
     methods
-        
-        
+
+
         function obj = MKR_MotorCarrier(varargin)
             obj.robotIP = "192.168.1.100";
             obj.robotPORT = 551;
@@ -64,40 +64,46 @@ classdef MKR_MotorCarrier < handle
             obj.available_streams = ["analog", "imu"];
             obj.streamToDraw = "";
             obj.channelToDraw = 0;
-            obj.digitalBuffer = [0;NaN;NaN;NaN;NaN;NaN;0;0;0;0;NaN;NaN;0;0];
-            obj.ultrasonicBuffer = [0];
+            obj.digitalPinBuffer = [0;NaN;NaN;NaN;NaN;NaN;0;0;0;0;NaN;NaN;0;0];
+            obj.analogPinBuffer = [0;0;NaN;NaN;0;0];
             obj.digitalPinsAvailable = [1, 7, 8, 9, 10, 13, 14];
-            obj.drFlag = 0;
+            obj.analogPinsAvailable = [1 2 5 6];
             obj.animation_t = 0;
             obj.graphBuffer = zeros(7,50);
             obj.sizeOfRecordedDataBuffer = 100000;
             obj.RecordedDataBuffer = zeros(7,obj.sizeOfRecordedDataBuffer);
             obj.RDB_Toggle = 0;
             obj.RDB_Index = 1;
+            obj.red = 0;
+            obj.green = 0;
+            obj.blue = 0;
+            obj.irBuffer = [NaN;NaN;NaN;NaN];
+            obj.encoderPos = [NaN;NaN];
+            obj.encoderVel = [NaN;NaN];
             init(obj);
         end
-        
-        
+
+
         function pinMode(obj, pin, io)
             %   PINMODE(pin, "INPUT") sets pin as an input pin
             %
             %   PINMODE(pin, "OUTPUT") sets pin as an output pin
-            
+
             if nargin < 3
                 error("Not enough input arguments");
             end
-            
+
             if ~isnumeric(pin) || ~ismember(pin,obj.digitalPinsAvailable)
                 error(strcat("pinMode can only write to the following pins: ", ...
                     num2str(obj.digitalPinsAvailable)));
             end
-            
+
             io = string(upper(io));
-            
+
             if ~ismember(io, ["INPUT", "OUTPUT"])
                 error("Unable to set pin. Assigned pin mode must either be 'INPUT' or 'OUTPUT'");
             end
-            
+
             switch io
                 case "INPUT"
                     io = 0;
@@ -106,30 +112,31 @@ classdef MKR_MotorCarrier < handle
             end
             sendOverUDP(obj, 0, pin, io);
         end
-        
+
+
         function digitalWrite(obj, pin, val)
             %   DIGITALWRITE(pin, val) writes value val (1 or 0) to
             %   designated pin
-            
+
             if nargin ~= 3
                 error("digitalWrite takes two arguments");
             end
-            
+
             if ~isnumeric(pin) && ~isnumeric(val)
                 error("Inputs must be a numer");
             end
-            
+
             if ~ismember(pin, obj.digitalPinsAvailable)
                 error(strcat("digitalWrite can only write to the following pins: ", ...
                     num2str(obj.digitalPinsAvailable)));
             end
-            
+
             if ~ismember(val, [0 1])
                 error("digitalWrite can only write a value of 1 or 0");
             end
             sendOverUDP(obj, 1, pin, val);
         end
-        
+
         function echoduration = ultrasonicPulse(obj)
             %ULTRASONICPULSE() returns the echo duration from the
             %ultrasonic sensor
@@ -144,9 +151,26 @@ classdef MKR_MotorCarrier < handle
             sendOverUDP(obj, 12, period, duration)
             pause(duration/1000);
         end
+        function reflectanceSetup(obj)
+            %Digital pins 7,8,9,10 are reserved for IR reflectance sensor
+            %(can adjust this once full set of sensors is implemented)
+            %Notes:
+            %   Vin must be connected to motor carrier board and LEDON
+            %   must be directly connected to 5V
+            sendOverUDP(obj,13,1,1)
+        end
+        function vals = readReflectance(obj)
+            sendOverUDP(obj,14,1,1)
+            pause(0.05)
+            v1 = str2num(obj.irBuffer(1));
+            v2 = str2num(obj.irBuffer(2));
+            v3 = str2num(obj.irBuffer(3));
+            v4 = str2num(obj.irBuffer(4));
+            vals = [v1,v2,v3,v4];
+        end
         function pinvalue = digitalRead(obj, pin)
             % DIGITALREAD(p) returns the value at digital pin p (1 or 0)
-            
+
             if ~isnumeric(pin)
                 error("Input must be a number");
             end
@@ -154,24 +178,51 @@ classdef MKR_MotorCarrier < handle
                 error(strcat("digitalRead can only read from the following pins: ", ...
                     num2str(obj.digitalPinsAvailable)));
             end
-            
+
             sendOverUDP(obj, 2, pin, 1);
             pause(.05);
-            pinvalue = obj.digitalBuffer(pin);
+            pinvalue = obj.digitalPinBuffer(pin);
         end
-        
-        
+
+        function [r,g,b] = rgbRead(obj)
+            % RGBREAD() returns the value of the rgb color sensor (r,g,b)
+
+            sendOverUDP(obj, 18, 0, 0);
+            pause(.1);
+            r = obj.red;
+            g = obj.green;
+            b = obj.blue;
+        end
+
+
+        function pinvalue = analogRead(obj, pin)
+            % ANALOGREAD(p) returns the value at analog pin p. To read from
+            % pin A1, call the function as analogRead(1);
+
+            if ~isnumeric(pin)
+                error("Input must be a number. To read pin A1, call analogRead(1)");
+            end
+            if ~ismember(pin, obj.analogPinsAvailable)
+                error(strcat("digitalRead can only read from the following pins: ", ...
+                    num2str(obj.analogPinsAvailable)));
+            end
+            sendOverUDP(obj, 4, pin, 1);
+            pause(.05);
+            pinvalue = obj.analogPinBuffer(pin);
+        end
+
+
         function setRGB(obj, r, g, b)
             % SETRGB(r,g,b)  sets the LED to the rgb value given in the
             % arguments. each value must be between 0 and 255
             if nargin ~=4
                 error("Invalid number of arguments")
             end
-            
+
             if ~isnumeric(r) || ~isnumeric(g) || ~isnumeric(b)
                 error("Input arguments must be numbers between 0 and 255")
             end
-            
+
             if ~ismember(r, 0:255) || ~ismember(g, 0:255) || ~ismember(b, 0:255)
                 error("RGB values must be integers between 0 and 255");
             end
@@ -185,49 +236,49 @@ classdef MKR_MotorCarrier < handle
             end
             sendOverUDP(obj, 5, str2double(strcat("9", c(1), c(2), c(3))), 0);
         end
-        
-        
+
+
         function motor(obj, motor, dutyCycle)
             % MOTOR(motor, dutyCycle) writes the dutycycle (-100 - 100)
             % to servo motor (1 - 4)
-            
+
             if nargin < 3
                 error("Not enough input arguments");
             end
-            
+
             if ~isnumeric(motor) || ~ismember(motor,1:4)
                 error("motor must be a integer value between 1 and 4")
             end
-            
+
             if ~isnumeric(dutyCycle) || ~ismember(dutyCycle, -100:100)
                 error("dutyCycle must be an integer value between -100 and 100");
             end
             sendOverUDP(obj, 6, motor, dutyCycle);
         end
-        
-        
+
+
         function servo(obj, servo, position)
             % SERVO  writes a value to one of the four servo motors
             % available on the arduino.
             %
             %   SERVO(A,B) writes the position cycle B (0-180) to servo A (1, 2,
             %   3 or 4)
-            
+
             if nargin < 3
                 error("Not enough input arguments");
             end
-            
+
             if ~isnumeric(servo) || ~ismember(servo, 1:4)
                 error("servo must be a integer value between 1 and 4")
             end
-            
+
             if ~isnumeric(position) || ~ismember(position, 0:180)
                 error("position must be an integer value between 0 and 180");
             end
             sendOverUDP(obj, 7, servo, position);
         end
-        
-        
+
+
         function startStream(obj, streamType)
             % STARTSTREAM  begins a data stream from the MKR. Data is
             % streamed into a buffer that can be read using the
@@ -238,37 +289,37 @@ classdef MKR_MotorCarrier < handle
             if ~isstring(streamType) && ~ischar(streamType)
                 error("Input must be a string");
             end
-            
+
             streamTypeCorrected = lower(streamType); % makes input lowercase
-            
+
             if ~ismember(streamTypeCorrected, obj.available_streams)
                 error(obj.invalidStreamInput(streamType));
             end
-            
+
             obj.stream(streamTypeCorrected, 1);
         end
-        
-        
+
+
         function stopStream(obj, streamType)
             % STOPSTREAM  Stops a data from from the MKR.
             %
             % STOPSTREAM(<data_stream>) string <data_stream> determines
             % which type of stream will stop streaming (i.e. "analog")
-            
+
             if ~isstring(streamType) && ~ischar(streamType)
                 error("Input must be a string");
             end
-            
+
             streamTypeCorrected = lower(streamType); % makes input lowercase
-            
+
             if ~ismember(streamTypeCorrected, obj.available_streams)
                 error(obj.invalidStreamInput(streamType));
             end
-            
+
             obj.stream(streamTypeCorrected, 0);
         end
-        
-        
+
+
         function values = getAverageData(obj, streamType, varargin)
             % GETAVERAGEDATA(<data_stream>) returns an array of the mean
             %   of the data across the entire <data_stream> buffer
@@ -276,31 +327,31 @@ classdef MKR_MotorCarrier < handle
             % GETAVERAGEDATA(<data_stream>, A) returns the average
             %   across the buffer of <data_stream> for the previous A
             %   number of samples
-            
+
             if nargin == 1
                 error("Not enough input arguments")
             end
-            
+
             if ~isstring(streamType) && ~ischar(streamType)
                 error("Input must be a string");
             end
-            
+
             streamTypeCorrected = lower(streamType); % makes input lowercase
-            
+
             if ~ismember(streamTypeCorrected, obj.available_streams)
                 error(obj.invalidStreamInput(streamType));
             end
-            
+
             if nargin == 3
                 if varargin{1} < 1 || varargin{1} > obj.sizeofBuffer || ~isnumeric(varargin{1}) || ~ismember(varargin{1}, 1:500)
                     error(strcat("Input must be a number between 1 and ", string(obj.sizeofBuffer - 1)));
                 end
             end
-            
+
             if nargin > 3
                 error("Too many input arguments")
             end
-            
+
             switch(streamTypeCorrected)
                 case "analog"
                     if nargin == 3 && varargin{1} > 0
@@ -317,17 +368,17 @@ classdef MKR_MotorCarrier < handle
                 otherwise
             end
         end
-        
-        
+
+
         function values = getNewData(obj, streamType)
             % GETNEWDATA(<streamType>)  returns only the data from the
             % designated streamType that hasn't been pulled previously.
             if nargin == 1
                 error("Not enough input arguments");
             end
-            
+
             streamTypeCorrected = lower(streamType); % makes input lowercase
-            
+
             if ~ismember(streamTypeCorrected, obj.available_streams)
                 error(obj.invalidStreamInput(streamType));
             end
@@ -341,44 +392,74 @@ classdef MKR_MotorCarrier < handle
                     obj.newImuIndex = obj.sizeofBuffer;
             end
         end
-        
-        
+
+
         function getVoltage(obj)
             % GETVOLTAGE  prints the battery level to the command window
-            
+
             sendOverUDP(obj, 10, 0, 0);
         end
-        
-        
+
+        function resetEncoder(obj,enc_num)
+            sendOverUDP(obj,15,1,enc_num);
+        end
+
+        function [val1,val2] = readEncoderPose(obj)
+            sendOverUDP(obj,16,1,1);
+            pause(0.05);
+            val1 = str2num(obj.encoderPos(1));
+            val2 = str2num(obj.encoderPos(2));
+        end
+
+        function [val1,val2] = readEncoderVel(obj)
+            sendOverUDP(obj,17,1,1);
+            pause(0.05);
+            %disp(obj.encoderVal)
+            val1 = str2num(obj.encoderVel(1));
+            val2 = str2num(obj.encoderVel(2));
+        end
         function livePlot(obj, streamType, varargin)
             % LIVEPLOT(streamType)  displays a live plot of all the values
             % read in on the streamType stream.
             %
             % LIVEPLOT(streamType, A) displays a live plot of the values
-            % read in on the streamType stream, channel A. 
+            % read in on the streamType stream, channel A.
 
             if nargin == 1
                 error("Not enough input arguments");
             end
-            
+
             if ~isstring(streamType) && ~ischar(streamType)
                 error("Input must be a string");
             end
-            
+
             streamTypeCorrected = lower(streamType); % makes input lowercase
-            
+
             if ~ismember(streamTypeCorrected, obj.available_streams)
                 error(obj.invalidStreamInput(streamType));
             end
-            
+
             try
                 clear obj.a1 obj.a2 obj.a3 obj.a4 obj.i1 obj.i2 obj.i3
                 close all;
             catch
             end
 
+
             obj.streamToDraw = streamType;
             if nargin > 2
+                if obj.streamToDraw == "imu"
+                    error("IMU livePlot does not support second arguments");
+                end
+
+                if ~isnumeric(varargin{1})
+                    error("Second argument must be a number");
+                end
+
+                if ~ismember(varargin{1}, obj.analogPinsAvailable)
+                    error(strcat("livePlot can only plot following pins: ", ...
+                        num2str(obj.analogPinsAvailable)));
+                end
                 obj.channelToDraw = varargin{1};
             else
                 obj.channelToDraw = 0;
@@ -396,7 +477,7 @@ classdef MKR_MotorCarrier < handle
                     obj.a3.Color = 'g'; obj.a3.LineWidth = 1;
                     obj.a4 = animatedline;
                     obj.a4.Color = 'y'; obj.a4.LineWidth = 1;
-                    
+
                     switch(obj.channelToDraw)
                         case 0
                             legend("Analog 1", "Analog 2", "Analog 5", "Analog 6" ,'Location', 'northwest');
@@ -404,11 +485,11 @@ classdef MKR_MotorCarrier < handle
                             legend("Analog 1",'Location', 'northwest');
                         case 2
                             legend('',"Analog 2", 'Location', 'northwest');
-                        case 3
+                        case 5
                             legend('','',"Analog 5", 'Location', 'northwest');
-                        case 4
+                        case 6
                             legend('','','',"Analog 6" ,'Location', 'northwest');
-                    end 
+                    end
 
                 case 'imu'
                     obj.i1 = animatedline;
@@ -420,22 +501,22 @@ classdef MKR_MotorCarrier < handle
                     legend("X", "Y", "Z", 'Location', 'northwest');
             end
         end
-        
-        
+
+
         function startRecording(obj)
             % STARTRECORDING begins saving the data being streamed.
-            
+
             if nargin ~=1
                 error("Invalid number of input arguments")
             end
             obj.RDB_Toggle = 1;
         end
-        
-        
+
+
         function data = stopRecording(obj)
             % STOPRECORDING Stops saving the data being streamed, and
             % returns the saved data
-            
+
             if nargin ~=1
                 error("Invalid number of input arguments")
             end
@@ -444,13 +525,13 @@ classdef MKR_MotorCarrier < handle
             obj.RDB_Index = 1;
             obj.RecordedDataBuffer = zeros(7,obj.sizeOfRecordedDataBuffer);
         end
-        
-        
+
+
         function close(obj, varargin)
             % CLOSE  clears the udp input buffer, ends the analog streams,
             % turns off the on-board LED back to blue, and clears the
             % udpport object.
-            
+
             if isobject(obj.u)
                 flush(obj.u, "input");
                 stream(obj, "ANALOG", 0);
@@ -459,16 +540,16 @@ classdef MKR_MotorCarrier < handle
                 clear obj.u
             end
         end
-        
+
     end
-    
-    
+
+
     methods(Hidden=true)
-        
+
         function obj = init(obj, varargin)
             % INIT  connects to the UDP Object. This function is generally
             % only called internally when the costructor is ran.
-            
+
             attemptCount = 0;
             fprintf("Trying to Connect");
             while obj.ready == 0 && attemptCount < 10
@@ -493,14 +574,14 @@ classdef MKR_MotorCarrier < handle
                 fprintf("\nMATLAB was unable to connect to the MKR 1010\n");
             end
         end
-        
-        
+
+
         function read(obj, varargin)
             % READ  is a callback function designed to be called whenever
             % there is a datagram available in the UDP buffer. This
             % function handles the message appropriately, and never needs
             % to be called by the user
-            
+
             try
                 % Read data and update status
                 datagramCount = obj.u.NumDatagramsAvailable;
@@ -508,10 +589,10 @@ classdef MKR_MotorCarrier < handle
             catch
                 disp('UDP Error!');
             end
-            
+
             for i = 1:datagramCount
                 obj.tempSignal = split(convertCharsToStrings(char(uDatagram(i).Data)),":");
-                
+
                 %switch statement goes here.
                 switch(obj.tempSignal(1))
                     case "ANA"
@@ -535,26 +616,40 @@ classdef MKR_MotorCarrier < handle
                             obj.RDB_Index = obj.RDB_Index + 1;
                         end
                         obj.drawPlot();
+                    case "RGB"
+                        v = str2double(split(obj.tempSignal(2),','));
+                        obj.red = v(1);
+                        obj.green = v(2);
+                        obj.blue = v(3);
                     case "DIG"
                         index = str2double(obj.tempSignal(2));
                         value = str2double(obj.tempSignal(3));
-                        obj.digitalBuffer(index) = value;
-                        obj.drFlag = 1;
+                        obj.digitalPinBuffer(index) = value;
+                    case "ANR"
+                        index = str2double(obj.tempSignal(2));
+                        value = str2double(obj.tempSignal(3));
+                        obj.analogPinBuffer(index) = value;
                     case "US"
                         value = str2double(obj.tempSignal(2));
                         obj.ultrasonicBuffer(1) = value;
                     case "MSG"
                         disp(obj.tempSignal(2:end));
+                    case "IR"
+                        obj.irBuffer = obj.tempSignal(2:end);
+                    case "ENC"
+                        obj.encoderPos = obj.tempSignal(2:end);
+                    case "ENC_VEL"
+                        obj.encoderVel = obj.tempSignal(2:end);
                 end
             end
         end
-        
-        
+
+
         function drawPlot(obj)
             % DRAWPLOT adds the stream (selected from obj.livePlot) to the
             % animated lines to create a real-time plot. This function
             % never needs to be called by the user
-            
+
             if obj.plotToggle
                 if obj.plotDelay >= obj.plotDelayMax
                     obj.plotDelay = 1;
@@ -576,11 +671,11 @@ classdef MKR_MotorCarrier < handle
                                         addpoints(obj.a1,obj.animation_t, obj.graphBuffer(1,end));
                                     case 2
                                         addpoints(obj.a2,obj.animation_t, obj.graphBuffer(2,end));
-                                    case 3
+                                    case 5
                                         addpoints(obj.a3,obj.animation_t, obj.graphBuffer(3,end));
-                                    case 4
+                                    case 6
                                         addpoints(obj.a4,obj.animation_t, obj.graphBuffer(4,end));
-                                end 
+                                end
                             case 'imu'
                                 axis([obj.animation_t-40, obj.animation_t, min(min(obj.graphBuffer(5:7,:)))-10, max(max(obj.graphBuffer(5:7,:)))+10]);
                                 addpoints(obj.i1,obj.animation_t, obj.graphBuffer(5,end));
@@ -603,8 +698,8 @@ classdef MKR_MotorCarrier < handle
                 obj.plotDelay = obj.plotDelay + 1;
             end
         end
-        
-        
+
+
         function sendOverUDP(obj, command, pin, value)
             % SENDOVERUDP  sends a string over UDP to the established UDP
             % host. This isn't designed to used directly by the user, but
@@ -615,7 +710,7 @@ classdef MKR_MotorCarrier < handle
             % values for those pins on the arduino.
             %
             % SENDOVERUDP(A,B,C) sends a string of the form "A:B:C"
-            
+
             if ischar(command) == 0
                 command = int2str(command);
             end
@@ -626,11 +721,11 @@ classdef MKR_MotorCarrier < handle
                 value = int2str(value);
             end
             dataString = strcat(command, ':', pin, ':', value);
-            
+
             write(obj.u, dataString, obj.robotIP, obj.robotPORT); %Sends the data over UDP
         end
-        
-        
+
+
         function stream(obj, streamType, on_off)
             % STREAM  streams data from the indicated data stream to the
             % buffer in MATLAB.
@@ -641,9 +736,9 @@ classdef MKR_MotorCarrier < handle
             %
             %   STREAM(<data_stream>, 0) stops streaming from
             %   <data_stream>
-            
+
             streamType = lower(streamType); % makes input lowercase
-            
+
             switch(streamType)
                 case "analog"
                     stream = 0;
@@ -664,8 +759,8 @@ classdef MKR_MotorCarrier < handle
             end
             sendOverUDP(obj, 8, stream, on_off);
         end
-        
-        
+
+
         function EM = invalidStreamInput(obj, givenInput)
             streams = [];
             for i=1:length(obj.available_streams)
