@@ -71,26 +71,8 @@ classdef SLAM_Controller
                 fprintf("Place ir sensor completelely off the track.\n")
                 obj.body.setRGB(255,0,255);
                 pause(obj.calibration_rate);
-
-                tic;
-                samples = zeros(1,4);
-                elapsed_time = 0;
-                increments = 0;
-                blink_red = false;
-                while elapsed_time < obj.calibration_time
-                    if(mod(elapsed_time, obj.blinking_rate) < 0.1)
-                        if(blink_red)
-                            obj.body.setRGB(255,69,0);
-                            blink_red = false;
-                        else
-                            obj.body.setRGB(0,69,255);
-                            blink_red = true;
-                        end
-                    end
-                    samples = samples + obj.body.readReflectance();
-                    increments = increments + 1;
-                    elapsed_time = toc;
-                end
+                
+                [samples,increments] = getSamples();
                 if(isequal(samples, [nan, nan, nan, nan]) || increments == 0)
                     success = false;
                     return;
@@ -101,25 +83,7 @@ classdef SLAM_Controller
                 obj.body.setRGB(255,0,255);
                 pause(obj.calibration_rate);
                 
-                tic;
-                samples = zeros(1,4);
-                blink_red = false;
-                increments = 0;
-                elapsed_time = 0;
-                while elapsed_time < obj.calibration_time
-                    if(mod(elapsed_time, obj.blinking_rate) < 0.1)
-                        if(blink_red)
-                            obj.body.setRGB(255,69,0);
-                            blink_red = false;
-                        else
-                            obj.body.setRGB(0,69,255);
-                            blink_red = true;
-                        end
-                    end
-                    samples = samples + obj.body.readReflectance();
-                    increments = increments + 1;
-                    elapsed_time = toc;
-                end
+                [samples, increments] = getSamples();
                 if(isequal(samples, [nan, nan, nan, nan]) || increments == 0)
                     success = false;
                     return;
@@ -128,6 +92,29 @@ classdef SLAM_Controller
                 success = true;
                 return;
             end
+        end
+        function [samples, increments] = getSamples(obj)
+            tic;
+            samples = zeros(1,4);
+            blink_red = false;
+            increments = 0;
+            elapsed_time = 0;
+
+            while elapsed_time < obj.calibration_time
+                if(mod(elapsed_time, obj.blinking_rate) < 0.1)
+                    if(blink_red)
+                        obj.body.setRGB(255,69,0);
+                        blink_red = false;
+                    else
+                        obj.body.setRGB(0,69,255);
+                        blink_red = true;
+                    end
+                end
+                samples = samples + obj.body.readReflectance();
+                increments = increments + 1;
+                elapsed_time = toc;
+            end
+            return;
         end
     end
 end 
