@@ -20,4 +20,7 @@ while(1)
         break;
     end
     x,y = controller.do_task();
+    if(controller.state == controller.StandBy)
+        start_robot = false;
+    end
 end
