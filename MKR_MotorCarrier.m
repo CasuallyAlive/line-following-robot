@@ -413,10 +413,14 @@ classdef MKR_MotorCarrier < handle
 
         function [val1,val2] = readEncoderVel(obj)
             sendOverUDP(obj,17,1,1);
-            pause(0.05);
+            pause(0.07);
             %disp(obj.encoderVal)
-            val1 = str2num(obj.encoderVel(1));
-            val2 = str2num(obj.encoderVel(2));
+            try
+                val1 = str2num(obj.encoderVel(1));
+                val2 = str2num(obj.encoderVel(2));
+            catch
+                disp('Errored out, last data received was:'+obj.encoderVel(1)+', '+obj.encoderVel(2))                
+            end
         end
         function livePlot(obj, streamType, varargin)
             % LIVEPLOT(streamType)  displays a live plot of all the values
