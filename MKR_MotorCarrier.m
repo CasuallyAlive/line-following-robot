@@ -422,6 +422,7 @@ classdef MKR_MotorCarrier < handle
                 disp('Errored out, last data received was:'+obj.encoderVel(1)+', '+obj.encoderVel(2))                
             end
         end
+        
         function livePlot(obj, streamType, varargin)
             % LIVEPLOT(streamType)  displays a live plot of all the values
             % read in on the streamType stream.
