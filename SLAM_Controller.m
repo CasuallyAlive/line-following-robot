@@ -3,12 +3,12 @@ classdef SLAM_Controller
         StandBy, Calibration, FollowLineForward, GraspItem, TurnAround, UnGraspItem, BeFree, Fork;
     end
     properties
-        state;
-        classifier;
-        body;
-        destinations_visited; % nodes in the track graph
-        forks_visited;
-        forks_completely_traversed;
+        state; % the state of the robot.
+        classifier; % the neural net classifier.
+        body; % the motor_carrier object for this SLAM instance.
+        destinations_visited; % nodes in the track graph.
+        %forks_visited; % the locations where forks are encountered.
+        %forks_completely_traversed; % forks marked as being completely visited.
         track_graph;
         calibration_time;
         max_ir_reading;
@@ -17,7 +17,7 @@ classdef SLAM_Controller
         is_calibrated;
     end
     methods
-        function obj = SLAM_Controller(classifier, body)
+        function obj = SLAM_Controller(classifier,body)
             obj.state = StandBy;
             obj.classifier = classifier;
             obj.body = body;
@@ -53,7 +53,15 @@ classdef SLAM_Controller
                     posY = 0;
                     return;
                 case SLAM_Controller.FollowLineForward % PID control for IR sensor and speed
+                    obj.body.resetEncoder(1);
+                    obj.body.resetEncoder(2);
                     
+                    pause(0.5);
+                    ir_reading = obj.body.readReflectance();
+                    elapsed_time = tic;
+                    while not(isequal(ir_reading, obj.max_ir_reading))
+                        [motor1_encoding, motor2_encoding] = obj.body.readEncoderPose();
+                    end
                     ;
                 case SLAM_Controller.Fork % Follow a path, tie break tbd, if the path leads to a destination node that has not been visited.
                     ;
