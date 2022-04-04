@@ -6,7 +6,7 @@ classdef SLAM_Controller
         state; % the state of the robot.
         classifier; % the neural net classifier.
         body; % the motor_carrier object for this SLAM instance.
-        destinations_visited; % nodes in the track graph.
+        %destinations_visited; % nodes in the track graph.
         %forks_visited; % the locations where forks are encountered.
         %forks_completely_traversed; % forks marked as being completely visited.
         track_graph;
