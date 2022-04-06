@@ -1,7 +1,4 @@
-classdef SLAM_Controller
-    enumeration
-        StandBy, Calibration, FollowLineForward, GraspItem, TurnAround, UnGraspItem, BeFree, Fork;
-    end
+classdef SLAM_Controller < handle
     properties
         state; % the state of the robot.
         classifier; % the neural net classifier.
@@ -17,9 +14,9 @@ classdef SLAM_Controller
         is_calibrated;
     end
     methods
-        function obj = SLAM_Controller(classifier,body)
-            obj.state = StandBy;
-            obj.classifier = classifier;
+        function obj = SLAM_Controller(body)
+            obj.state = States.StandBy;
+            %obj.classifier = classifier;
             obj.body = body;
             obj.max_ir_reading = [nan, nan, nan, nan];
             obj.min_ir_reading = [nan, nan, nan, nan];
@@ -29,58 +26,62 @@ classdef SLAM_Controller
         end
         function [posX, posY] = do_task(obj)
             switch(obj.state)
-                case SLAM_Controller.StandBy
+                case States.StandBy
                     if(obj.is_calibrated)
-                        obj.state = FollowLineForward;
+                        obj.state = States.FollowLineForward;
                     else
-                        obj.state = calibrate_IR_Sensor;
+                        obj.state = States.Calibration;
                         obj.body.setRGB(255,0,0);
                     end
                     posX = 0;
                     posY = 0;
                     return;
-                case SLAM_Controller.Calibration
+                case States.Calibration
                     success = false;
                     while (not(success))
-                        success = calibrate_IR_Sensor();
+                        success = calibrate_IR_Sensor(obj);
                     end
-                    printf("Success! The IR sensor has been calibrated.");
+                    fprintf("Success! The IR sensor has been calibrated.");
                     obj.body.setRGB(0,255,0)
-                    obj.state = StandBy;
+                    obj.state = States.StandBy;
                     obj.is_calibrated = true;
 
                     posX = 0;
                     posY = 0;
                     return;
-                case SLAM_Controller.FollowLineForward % PID control for IR sensor and speed
-                    obj.body.resetEncoder(1);
-                    obj.body.resetEncoder(2);
-                    
-                    pause(0.5);
-                    ir_reading = obj.body.readReflectance();
-                    elapsed_time = tic;
-                    while not(isequal(ir_reading, obj.max_ir_reading))
-                        [motor1_encoding, motor2_encoding] = obj.body.readEncoderPose();
-                    end
+                case States.FollowLineForward % PID control for IR sensor and speed
+%                     obj.body.resetEncoder(1);
+%                     obj.body.resetEncoder(2);
+%                     
+%                     pause(0.5);
+%                     ir_reading = obj.body.readReflectance();
+%                     elapsed_time = tic;
+%                     while not(isequal(ir_reading, obj.max_ir_reading))
+%                         [motor1_encoding, motor2_encoding] = obj.body.readEncoderPose();
+%                     end
+%                     ;
+                case States.Fork % Follow a path, tie break tbd, if the path leads to a destination node that has not been visited.
                     ;
-                case SLAM_Controller.Fork % Follow a path, tie break tbd, if the path leads to a destination node that has not been visited.
+                case States.GraspItem % Pd? control for grasping the object
                     ;
-                case SLAM_Controller.GraspItem % Pd? control for grasping the object
+                case States.TurnAround % Pd? control for rotating the robot a complete 180
                     ;
-                case SLAM_Controller.TurnAround % Pd? control for rotating the robot a complete 180
+                case States.UnGraspItem % Pd? control for ungrasping an item
                     ;
-                case SLAM_Controller.UnGraspItem % Pd? control for ungrasping an item
-                    ;
-                case SLAM_Controller.BeFree % Pd? control for 
+                case States.BeFree % Pd? control for 
                     ;
             end
 
             function success = calibrate_IR_Sensor(obj)
-                fprintf("Place ir sensor completelely off the track.\n")
-                obj.body.setRGB(255,0,255);
-                pause(obj.calibration_rate);
                 
-                [samples,increments] = getSamples();
+                obj.body.reflectanceSetup();
+                pause(.1)
+
+                fprintf("Place ir sensor completelely off the track.\n");
+                obj.body.setRGB(255,0,255);
+                pause(obj.calibration_time);
+                
+                [samples,increments] = getSamples(obj);
                 if(isequal(samples, [nan, nan, nan, nan]) || increments == 0)
                     success = false;
                     return;
@@ -89,9 +90,9 @@ classdef SLAM_Controller
                 
                 fprintf("Place ir sensor such that the reflective tape covers the entire sensor.\n")
                 obj.body.setRGB(255,0,255);
-                pause(obj.calibration_rate);
+                pause(obj.calibration_time);
                 
-                [samples, increments] = getSamples();
+                [samples, increments] = getSamples(obj);
                 if(isequal(samples, [nan, nan, nan, nan]) || increments == 0)
                     success = false;
                     return;
@@ -118,6 +119,7 @@ classdef SLAM_Controller
                         blink_red = true;
                     end
                 end
+                
                 samples = samples + obj.body.readReflectance();
                 increments = increments + 1;
                 elapsed_time = toc;

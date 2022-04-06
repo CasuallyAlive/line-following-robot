@@ -1,11 +1,8 @@
 %% Setup Connection
 clear; clc; close all; % initialization
-
 %% Connect
-r = MKR_MotorCarrier; %connect to MKR
-
+controller = SLAM_Controller(MKR_MotorCarrier);
 %% Main loop for SLAM traversal
-controller = SLAM_Controller(null, r);
 
 start_robot = false;
 while(1)
@@ -15,12 +12,12 @@ while(1)
         end
         continue;
     end
-    if(start_robot && input("\n", "s") == "abort")
-        fprintf("Traversal was aborted!");
-        break;
-    end
-    x,y = controller.do_task();
-    if(controller.state == controller.StandBy)
+%     if(start_robot && input("\n", "s") == "abort")
+%         fprintf("Traversal was aborted!");
+%         break;
+%     end
+    controller.do_task();
+    if(controller.state == States.StandBy)
         start_robot = false;
     end
 end
