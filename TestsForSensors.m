@@ -121,3 +121,89 @@ for i = 0:1:180
     disp(i)
     pause(0.1)
 end
+
+%% PD controller for the IR sensor
+
+
+clear; clc; close all; instrreset;
+
+
+%% PID CONTROL FOR RPM
+r.resetEncoder(1);
+r.resetEncoder(2);
+
+pause(0.5);
+
+vals = 0;
+oldval = 0;
+val = 0;
+motorval = 0;
+Vel_M1 = 0;
+Vel_M2 = 0;
+
+control_M1 = 0; 
+control_M2 = 0;
+
+tic
+
+error_ir = 10;  % The goal IR val
+
+rpms = 0;
+
+error_sum_M1 = 0;
+last_error_M1 = 0;
+error_sum_M2 = 0;
+last_error_M2 = 0;
+
+kp = .05;         %proportional gain
+kd = 0.005;        %derivative gain
+ki = 0;         %integral gain
+SF = 1.178;
+
+while (1)
+
+    Vel_M1, Vel_M2 = r.readEncoderVel();
+
+    rpm_M1 = Vel_M1 * (1 / 720) * 60;  
+    rpm_M2 = Vel_M2 * (1 / 720) * 60;
+
+    
+    % Motor 1 (right motor PID values)
+    error_M1 = error_ir - rpm_M1;
+    error_sum_M1 = error_sum_M1 + error_M1;
+    error_delta_M1 = last_error_M1 - error_M1;
+    last_error_M1 = error_M1;
+
+    % Motor 2 (left motor PID values)
+    error_M2 = error_ir - rpm_M2;
+    error_sum_M2 = error_sum_M2 + error_M2;
+    error_delta_M2 = last_error_M2 - error_M2;
+    last_error_M2 = error_M2;
+
+    %Write the code for your controller output here, using the gain
+    %variables and the three errors computed above:
+    control_M1 = control_M1 + error_M1*kp + kd.*error_delta_M1 + ki.*error_sum_M1; %YOU WILL NEED TO EDIT THIS
+    control_M2 = control_M2 + error_M2*kp + kd.*error_delta_M2 + ki.*error_sum_M2;
+
+    %Caps the motor duty cycle at +/- 50
+    if control_M1 > 50
+        control_M1 = 50;
+    end 
+    if control_M1 < -50
+        control_M1 = -50;
+    end
+    if control_M2 > 50
+        control_M2 = 50;
+    end
+    if control_M2 < -50
+        control_M2 = -50;
+    end
+
+    ScaleF = FindSF(control_M1);
+    r.motor(3, round(control_M1) *SF);
+    r.motor(4, round(control_M2));
+end
+
+pause(0.1)
+r.motor(3,0)
+r.motor(4, 0)

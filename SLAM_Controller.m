@@ -13,6 +13,11 @@ classdef SLAM_Controller < handle
         blinking_rate;
         is_calibrated;
     end
+    properties (Constant = true)
+        KP = 0.0;
+        KD = 0.0;
+        KI = 0.0;
+    end
     methods
         function obj = SLAM_Controller(body)
             obj.state = States.StandBy;
@@ -50,16 +55,19 @@ classdef SLAM_Controller < handle
                     posY = 0;
                     return;
                 case States.FollowLineForward % PID control for IR sensor and speed
-%                     obj.body.resetEncoder(1);
-%                     obj.body.resetEncoder(2);
-%                     
-%                     pause(0.5);
-%                     ir_reading = obj.body.readReflectance();
-%                     elapsed_time = tic;
-%                     while not(isequal(ir_reading, obj.max_ir_reading))
-%                         [motor1_encoding, motor2_encoding] = obj.body.readEncoderPose();
-%                     end
-%                     ;
+                    obj.body.resetEncoder(1);
+                    obj.body.resetEncoder(2);
+                    
+                    pause(0.5);
+                    ir_reading = obj.body.readReflectance();
+                    //elapsed_time = tic;
+                    prev = elapsed_time;
+                    while not(obj.isFork(ir_reading))
+                        update_motorj_pd
+                        update
+                        [motor1_encoding, motor2_encoding] = obj.body.readEncoderPose();
+                    end
+                    ;
                 case States.Fork % Follow a path, tie break tbd, if the path leads to a destination node that has not been visited.
                     ;
                 case States.GraspItem % Pd? control for grasping the object
@@ -119,12 +127,17 @@ classdef SLAM_Controller < handle
                         blink_red = true;
                     end
                 end
-                
+
                 samples = samples + obj.body.readReflectance();
                 increments = increments + 1;
                 elapsed_time = toc;
             end
-            return;
+        end
+        function val = isFork(obj, reading)
+            val = isequal(ir_reading, obj.max_ir_reading);
+        end
+        function ir_PD_Controller(obj, reading, prev_time, current_time)
+
         end
     end
 end 
