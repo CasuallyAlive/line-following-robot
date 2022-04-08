@@ -21,18 +21,18 @@ while toc < runtime
     pause(0.1);
 end
 %% Getting value speeds for each motor
-RightMotor = zeros(6, 5)
-LeftMotor = zeros(6, 5)
+RightMotor = zeros(7, 10)
+LeftMotor = zeros(7, 10)
 VM1 = 0;
 VM2 = 0;
 x = 1;
 pause(0.1);
-for i = 10:10:40
+for i = 10:5:40
     r.motor(3, i);
     r.motor(4, i);
     tic
     y = 1;
-    while(toc < 5.7)
+    while(toc < 11.2)
         [VM1, VM2] = r.readEncoderVel();
         RightMotor(x, y) = VM1;
         LeftMotor(x, y) = VM2;
@@ -54,13 +54,12 @@ VLM_avg = mean(VLM');
 
 % Scale Factor
 SF = VLM_avg ./ VRM_avg
-
-SF_Count = 2
+%%
+SF = 1.13;
 for x = 20:10:30
-    r.motor(3, round(x * SF(SF_Count)))
+    r.motor(3, round(x * SF))
     r.motor(4, x)
     pause(2);
-    SF_Count = SF_Count + 1;
 end
 r.motor(3, 0)
 r.motor(4, 0)
