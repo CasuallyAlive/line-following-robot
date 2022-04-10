@@ -2,42 +2,22 @@ clear; clc; close all; instrreset;
 
 %% Connect to Device
 r = MKR_MotorCarrier;
-
-% CALCULATE THE SAMPLE RATE
-vals = 0;
-
-tic
-runtime = 1;
-r.motor(3,10);
-
-while toc < runtime
-%     val = r.readEncoder(1);
-    val1, val2 = r.readEncoderPose();
-    vals = vals + 1;
-end
-
-r.motor(3,0);
-disp(vals) %hint: if this is how many samples you got in runtime, then what is the sampling frequency?
-
 %% PID CONTROL FOR RPM
 r.resetEncoder(1);
 r.resetEncoder(2);
 
 pause(0.5);
 
-vals = 0;
-oldval = 0;
-val = 0;
-motorval = 0;
+Vel_M1 = 0;
+Vel_M2 = 0;
 
-control = 0; 
+control_M1 = 0; 
+control_M2 = 0;
 
 tic
 
-rpm_targ = 50;  %The goal RPM
+rpm_targ = 10;  %The goal RPM
 
-rpms = 0;
-times = 0;
 
 error_sum_M1 = 0;
 last_error_M1 = 0;
@@ -48,26 +28,18 @@ kp = .05;         %proportional gain
 kd = 0.005;        %derivative gain
 ki = 0;         %integral gain
 
-runtime = 2;
+runtime = 10;
 
 while toc < runtime
-    %count_delta = r.readEncoder(1); %this gets the encoder reading since the last time it was called
-    count_delta_M1, count_delta_M2 = r.readEncoderPose();
+    Vel_M1, Vel_M2 = r.readEncoderVel();
 
     %Calculate RPM from count_delta here:
         %hint 1: use the time between samples estimated from the first
         %section
         %hint 2: there are ~720 counts per rotation
         
-    time_elapsed = toc;
-    if(length(times) ~= 1)
-        time_elapsed = times(end) - times(end - 1);
-    end    
-    rpm_M1 = (count_delta_M1./(time_elapsed)) * (1 / 720) * 60;  %YOU WILL NEED TO EDIT THIS
-    rpm_M2 = (count_delta_M2./(time_elapsed)) * (1 / 720) * 60;
-
-%     rpms(end+1) = rpm;
-%     times(end+1) = toc;
+    rpm_M1 = Vel_M1 * (1 / 720) * 60;  
+    rpm_M2 = Vel_M2 * (1 / 720) * 60;
     
     % Motor 1 (right motor PID values)
     error_M1 = rpm_targ - rpm_M1;
@@ -97,11 +69,34 @@ while toc < runtime
         control_M2 = 50;
     end
     if control_M2 < -50
-        control_M2 = 
+        control_M2 = -50;
     end
-    r.motor(3,round(control));
-    r.motor(4, round())
+
+    ScaleF = FindSF(control_M1);
+    r.motor(3,round(control_M1 * ScaleF));
+    r.motor(4, round(control_M2));
 end
 
 pause(0.1)
 r.motor(3,0)
+r.motor(4, 0)
+
+
+%% Scale Factor function for motor 3 / right motor
+function ScaleFactor = FindSF(inputVal)
+    if inputVal >= 0 && inputVal < 10
+        ScaleFactor = 1.8108;
+    elseif inputVal >= 10 && inputVal < 15
+        ScaleFactor = 1.7083;
+    elseif inputVal >= 15 && inputVal < 20
+        ScaleFactor = 1.4024;
+    elseif inputVal >= 20 && inputVal < 25
+        ScaleFactor = 1.2583;
+    elseif inputVal >= 25 && inputVal < 30
+        ScaleFactor = 1.13;
+    elseif inputVal >= 30 && inputVal < 35
+        ScaleFactor = 1.3374;
+    else
+        ScaleFactor = 1.1556;
+    end
+end
