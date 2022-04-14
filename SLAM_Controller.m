@@ -107,10 +107,9 @@ classdef SLAM_Controller < handle
                     ;
                 case States.TurnAround % Pd? control for rotating the robot a complete 180
                     tic;
-                    runtime = 0.2;
                     obj.body.motor(obj.MOTOR_R, round(obj.TARGET_RPM * obj.R_MOTOR_SF));
                     obj.body.motor(obj.MOTOR_L, - obj.TARGET_RPM);
-                    while(toc < runtime)
+                    while(obj.line_within_proximity(obj.body.readReflectance, [1,2,3,4]))
                         pause(0.0001);
                     end
                     reading_ir = obj.body.readReflectance();
