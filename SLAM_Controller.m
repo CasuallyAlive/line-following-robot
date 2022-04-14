@@ -18,12 +18,15 @@ classdef SLAM_Controller < handle
         KD_RPM = 0.005;
         KI_RPM = 0.0;
 
-        KP_IR = .0001;
-        KD_IR = 0.0001;
+        KP_IR = 2;
+        KD_IR = .01;
         KI_IR = 0.0;
 
-        TARGET_RPM = 5;
+        TARGET_RPM = 15;
+        MAX_RPM = 30;
         TARGET_IR_READING = 0;
+        
+        R_MOTOR_SF = 1.3;
 
         MOTOR_L = 4;
         MOTOR_R = 3;
@@ -43,7 +46,7 @@ classdef SLAM_Controller < handle
             switch(obj.state)
                 case States.StandBy
                     if(obj.is_calibrated)
-                        obj.state = States.FollowLineForward;
+                        obj.state = States.FollowLineForward; %CHANGE
                     else
                         obj.state = States.Calibration;
                         obj.body.setRGB(255,0,0);
@@ -70,25 +73,25 @@ classdef SLAM_Controller < handle
                     
                     pause(0.1);
                     ir_reading = obj.body.readReflectance();
+                    pause(0.001)
 
-                    prev_error_M1 = 0; prev_error_M2 = 0; curr_error_M1 = 0; curr_error_M2 = 0;
-                    control_M1 = 0; control_M2 = 0; prev_control_M1 = 0; prev_control_M2 = 0;
+                    control_M1 = 0; control_M2 = 0;
                     error_IR = 0; prev_error_IR = 0;
                     tic;
                     while not(obj.isFork(ir_reading))
-                        [curr_error_M1, curr_error_M2, control_M1, control_M2] = obj.keepTargetSpeed_PD(prev_error_M1, prev_error_M2, prev_control_M1, prev_control_M2);
-                        [error_IR, control_M1, control_M2] = obj.ir_PD_Controller(obj.normalize_IR_reading(ir_reading),prev_error_IR, control_M1, control_M2);
+%                         [curr_error_M1, curr_error_M2, control_M1, control_M2] = obj.keepTargetSpeed_PD(prev_error_M1, prev_error_M2, prev_control_M1, prev_control_M2);
+                        [error_IR, control_M1, control_M2] = obj.ir_PD_Controller(obj.normalize_IR_reading(ir_reading),prev_error_IR);
                         
+                        [control_M1, control_M2] = obj.setMotorSpeeds(control_M1, control_M2);
+
                         ScaleF_M1 = obj.FindSF(control_M1);
                         ScaleF_M2 = obj.FindSF(control_M2);
 
-                        obj.body.motor(obj.MOTOR_R,round(control_M1 * ScaleF_M1));
-                        obj.body.motor(obj.MOTOR_L, round(control_M2 * ScaleF_M2));
-
+                        %obj.body.motor(obj.MOTOR_R, round(control_M1 * obj.R_MOTOR_SF));
+                        %obj.body.motor(obj.MOTOR_L, round(control_M2));
                         prev_error_IR = error_IR;
-                        prev_control_M1 = control_M1; prev_control_M2 = control_M2; prev_error_M1 = curr_error_M1; prev_error_M2 = curr_error_M2;
                         ir_reading = obj.body.readReflectance();
-                        pause(0.01);
+                        pause(0.001);
                     end
                     obj.body.motor(obj.MOTOR_R, 0);
                     obj.body.motor(obj.MOTOR_L, 0);
@@ -103,6 +106,21 @@ classdef SLAM_Controller < handle
                 case States.GraspItem % Pd? control for grasping the object
                     ;
                 case States.TurnAround % Pd? control for rotating the robot a complete 180
+                    tic;
+                    runtime = 0.2;
+                    obj.body.motor(obj.MOTOR_R, round(obj.TARGET_RPM * obj.R_MOTOR_SF));
+                    obj.body.motor(obj.MOTOR_L, - obj.TARGET_RPM);
+                    while(toc < runtime)
+                        pause(0.0001);
+                    end
+                    reading_ir = obj.body.readReflectance();
+                    while(not(obj.line_within_proximity(reading_ir,[1,2,3])))
+                        reading_ir= obj.body.readReflectance();
+                        pause(0.0001);
+                    end
+                    obj.body.motor(obj.MOTOR_R, 0);
+                    obj.body.motor(obj.MOTOR_L,0);
+                    obj.state = States.FollowLineForward;
                     ;
                 case States.UnGraspItem % Pd? control for ungrasping an item
                     ;
@@ -136,20 +154,6 @@ classdef SLAM_Controller < handle
             % Control calculations
             control_M1 = prev_control_M1 + error_M1.*obj.KP_RPM + obj.KD_RPM.*error_delta_M1; %YOU WILL NEED TO EDIT THIS
             control_M2 = prev_control_M2 + error_M2.*obj.KP_RPM + obj.KD_RPM.*error_delta_M2;
-        
-            %Caps the motor duty cycle at +/- 50
-            if control_M1 > 50
-                control_M1 = 50;
-            end 
-            if control_M1 < -50
-                control_M1 = -50;
-            end
-            if control_M2 > 50
-                control_M2 = 50;
-            end
-            if control_M2 < -50
-                control_M2 = -50;
-            end
         end
         function success = calibrate_IR_Sensor(obj)
                 
@@ -233,30 +237,44 @@ classdef SLAM_Controller < handle
                 ScaleFactor = 1.1556;
             end
         end
-        function [curr_error_IR, control_M1, control_M2] = ir_PD_Controller(obj, ir_normalized, prev_error_IR, prev_control_M1, prev_control_M2)
+        function [curr_error_IR, control_M1, control_M2] = ir_PD_Controller(obj, ir_normalized, prev_error_IR)
                         
             % Motor 1 (right motor PID values)
-            error_IR = -2*ir_normalized(1) - ir_normalized(2) + ir_normalized(3) + 2*ir_normalized(4);
+            error_IR = obj.get_IR_error(ir_normalized);
 %             error_sum_M1 = error_sum_M1 + error_M1;
             error_delta_IR = prev_error_IR - error_IR;
             curr_error_IR = error_IR;
 
             % Control calculations
-            control_M1 = prev_control_M1 + error_IR.*obj.KP_IR - obj.KD_IR.*error_delta_IR; %YOU WILL NEED TO EDIT THIS
-            control_M2 = prev_control_M2 - error_IR.*obj.KP_IR + obj.KD_IR.*error_delta_IR;
-        
-            %Caps the motor duty cycle at +/- 50
-            if control_M1 > 50
-                control_M1 = 50;
-            end 
-            if control_M1 < -50
-                control_M1 = -50;
+            pd_control_result = error_IR.*obj.KP_IR + obj.KD_IR.*error_delta_IR;
+            control_M1 = obj.TARGET_RPM - pd_control_result;
+            control_M2 = obj.TARGET_RPM + pd_control_result;
+        end
+        function error = get_IR_error(obj, reading_ir)
+            error = -2*reading_ir(1) - reading_ir(2) + reading_ir(3) + 2*reading_ir(4);
+        end
+        function [control_M1, control_M2] = setMotorSpeeds(obj, prev_control_M1, prev_control_M2)
+            if prev_control_M1 > obj.MAX_RPM
+                control_M1 = obj.MAX_RPM; 
+            elseif prev_control_M1 < (-1 * obj.MAX_RPM)
+                control_M1 = -1 * obj.MAX_RPM;
+            else
+                control_M1 = prev_control_M1;
             end
-            if control_M2 > 50
-                control_M2 = 50;
+
+            if prev_control_M2 > obj.MAX_RPM
+                control_M2 = obj.MAX_RPM;
+            elseif prev_control_M2 < (-1 * obj.MAX_RPM)
+                control_M2 = -1 * obj.MAX_RPM;
+            else
+                control_M2 = prev_control_M2;
             end
-            if control_M2 < -50
-                control_M2 = -50;
+        end
+        function bool = line_within_proximity(obj, reading, sensors)
+            min_avg = mean(obj.min_ir_reading);
+            bool = false;
+            for i = length(sensors)
+                bool = bool || (reading(sensors(i)) >= min_avg + 200);
             end
         end
     end

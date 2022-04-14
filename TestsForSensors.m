@@ -206,3 +206,19 @@ end
 pause(0.1)
 r.motor(3,0)
 r.motor(4, 0)
+
+%% Turn around test
+runtime = 5;
+r.reflectanceSetup();
+tic
+r.motor(3,10);
+r.motor(4,-10);
+while toc < runtime
+
+end 
+
+while round(-2*ir_normalized(1) - ir_normalized(2) + ir_normalized(3) + 2*ir_normalized(4))
+
+end
+r.motor(3,0);
+r.motor(4,0);
