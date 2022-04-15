@@ -18,15 +18,15 @@ classdef SLAM_Controller < handle
         KD_RPM = 0.005;
         KI_RPM = 0.0;
 
-        KP_IR = 2;
-        KD_IR = .01;
+        KP_IR = 1.2;
+        KD_IR = 0.005;
         KI_IR = 0.0;
 
-        TARGET_RPM = 15;
+        TARGET_RPM = 10;
         MAX_RPM = 30;
         TARGET_IR_READING = 0;
         
-        R_MOTOR_SF = 1.3;
+        R_MOTOR_SF = 1.2;
 
         MOTOR_L = 4;
         MOTOR_R = 3;
@@ -45,6 +45,14 @@ classdef SLAM_Controller < handle
         function [posX, posY] = do_task(obj)
             switch(obj.state)
                 case States.StandBy
+                    obj.body.motor(obj.MOTOR_R, 0);
+                    obj.body.motor(obj.MOTOR_L, 0);
+                                        
+                    obj.body.resetEncoder(1);
+                    obj.body.resetEncoder(2);
+
+                    pause(0.1);
+
                     if(obj.is_calibrated)
                         obj.state = States.FollowLineForward; %CHANGE
                     else
@@ -68,12 +76,9 @@ classdef SLAM_Controller < handle
                     posY = 0;
                     return;
                 case States.FollowLineForward % PID control for IR sensor and speed
-                    obj.body.resetEncoder(1);
-                    obj.body.resetEncoder(2);
-                    
-                    pause(0.1);
+ 
                     ir_reading = obj.body.readReflectance();
-                    pause(0.001)
+                    pause(0.1)
 
                     control_M1 = 0; control_M2 = 0;
                     error_IR = 0; prev_error_IR = 0;
@@ -84,14 +89,10 @@ classdef SLAM_Controller < handle
                         
                         [control_M1, control_M2] = obj.setMotorSpeeds(control_M1, control_M2);
 
-                        ScaleF_M1 = obj.FindSF(control_M1);
-                        ScaleF_M2 = obj.FindSF(control_M2);
-
-                        %obj.body.motor(obj.MOTOR_R, round(control_M1 * obj.R_MOTOR_SF));
-                        %obj.body.motor(obj.MOTOR_L, round(control_M2));
+                        obj.body.motor(obj.MOTOR_R, round(control_M1*obj.R_MOTOR_SF));
+                        obj.body.motor(obj.MOTOR_L, round(control_M2));
                         prev_error_IR = error_IR;
                         ir_reading = obj.body.readReflectance();
-                        pause(0.001);
                     end
                     obj.body.motor(obj.MOTOR_R, 0);
                     obj.body.motor(obj.MOTOR_L, 0);
@@ -99,7 +100,7 @@ classdef SLAM_Controller < handle
                     pause(0.01);
 
                     elapsed_time = toc;
-                    obj.state = States.StandBy;
+                    obj.state = States.TurnAround;
                     ;
                 case States.Fork % Follow a path, tie break tbd, if the path leads to a destination node that has not been visited.
                     ;
@@ -211,10 +212,10 @@ classdef SLAM_Controller < handle
         end
         function val = isFork(obj, ir_reading)
             normalized_ir = obj.normalize_IR_reading(ir_reading);
-            val = obj.valThreshold(normalized_ir(1), 1, 0.4) && ...
-                obj.valThreshold(normalized_ir(2), 1, 0.4) && ...
-                obj.valThreshold(normalized_ir(3), 1, 0.4) && ...
-                obj.valThreshold(normalized_ir(4), 1, 0.4);
+            val = obj.valThreshold(normalized_ir(1), 1, 0.5) && ...
+                obj.valThreshold(normalized_ir(2), 1, 0.5) && ...
+                obj.valThreshold(normalized_ir(3), 1, 0.5) && ...
+                obj.valThreshold(normalized_ir(4), 1, 0.5);
         end
         function val = valThreshold(obj, i, j, padding)
             val = i >= (j - padding); 
