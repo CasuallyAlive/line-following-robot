@@ -15,13 +15,13 @@ r.servo(4,0);
 
 previousAnalogVal = 0;
 currentAnalogVal = 0;
-r.livePlot('analog', 2)
+%r.livePlot('analog', 2)
 for i = 10:10:180
    r.servo(4, i);
    currentAnalogVal = r.getAverageData('analog', 5);
    pause(0.1);
-   currentAnalogVal(2)
-   previousAnalogVal
+   %currentAnalogVal(2)
+   %previousAnalogVal
     highTresh = 0;
     lowTresh = 0;
    if( i < 50)
@@ -34,11 +34,11 @@ for i = 10:10:180
    if( (currentAnalogVal(2) <= highTresh ) && (currentAnalogVal(2)>= lowTresh ) )
        try
         %s 47 i 140, m 35 i 110 , B 23 i 80
-        if (i <= 70 )
-          r.servo(4, i - 23); %s 47 m 35 , B 23
+        if (i <= 80 )
+          r.servo(4, i - 20); %s 47 m 35 , B 23
           disp('Big')
           break;
-        elseif(i > 70 && i < 115)
+        elseif(i > 80 && i < 115)
           r.servo(4, i - 30);
           disp('Medium')
           break;
@@ -55,6 +55,7 @@ for i = 10:10:180
    previousAnalogVal = currentAnalogVal(2);
    pause(0.5);
 end
+%r.servo(4,0);
 r.stopStream('analog');
 
 %% Print analog values with claw feedback
