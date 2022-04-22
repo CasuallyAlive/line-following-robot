@@ -11,7 +11,7 @@ classdef SLAM_Controller < handle
         max_ir_reading;
         min_ir_reading;
         blinking_rate;
-        is_calibrated;
+%         is_calibrated;
     end
     properties (Constant = true)
         KP_RPM = 0.05;

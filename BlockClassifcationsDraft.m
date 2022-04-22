@@ -3,7 +3,7 @@ clear; clc; close all; instrreset;
 r = MKR_MotorCarrier;
 %% Define boxes, count, and setup for saving data
 blockClass = [0 1 2]; % Zero bad, One good, 2 Excellent
-trialCount = 25;
+trialCount = 1;
 %trialCount = 6;
 saveDirectory = [pwd, '\data'];
 
@@ -30,8 +30,16 @@ ExcelMin = zeros(5,1);
 ExcelMax = zeros(5,1);
 first = true;
 
+
+for class = 1:3
 % Begin gathering data
-countdown("Beginning Recording Bad blocks in", 3);
+if(class == 1)
+    countdown("Beginning Recording Bad blocks in", 3);
+elseif(class == 2)
+    countdown("Beginning Recording Good blocks in", 3);
+else
+    countdown("Beginning Recording Excellent blocks in", 3);
+end
 for x = 1:trialCount
     fprintf("Please Place Bad Block, Trial No. %d\n", x);
     while(input("Start recording\n","s") ~= "start")
@@ -69,6 +77,7 @@ end
 a = a + 1;
 b = 1;
 first = true;
+end
 countdown("Beginning Recording Good Block in", 3);
 for x = 1:trialCount
     fprintf("Please Place Good Block, Trial No. %d\n", x);
@@ -370,20 +379,20 @@ for i = 10:10:180
             if (i <= 80 )
                 obj.servo(4, i - 23); %s 47 m 35 , B 23
                 disp('Big')
-                %size = i -23;
-                size = 1;
+                size = i - 23;
+%                 size = 1;
                 break;
             elseif(i > 80 && i < 115)
                 obj.servo(4, i - 30);
                 disp('Medium')
-                %size = i -30;
-                size = 0.5;
+                size = i - 30;
+%                 size = 0.5;
                 break;
             else
                 obj.servo(4, i - 25);
                 disp('Small')
-                %size = i - 25;
-                size = 0;
+                size = i - 25;
+%                 size = 0;
                 break;
             end
         catch
