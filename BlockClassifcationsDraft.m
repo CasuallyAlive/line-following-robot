@@ -202,6 +202,14 @@ for col = 1:150
     end
 end
 %% Normalize data
+MAX_SIZE = max(training_examples(5,:));
+MIN_SIZE = min(training_examples(5,:));
+
+MAX_HALL = max(training_examples(1,:));
+MIN_HALL = min(training_examples(1,:));
+
+CONSTS = [MAX_SIZE,MIN_SIZE,MAX_HALL,MIN_HALL];
+
 colors = (training_examples_ideal(2:4,:));
 hall_effect = training_examples(1,:);
 

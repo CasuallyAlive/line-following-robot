@@ -12,6 +12,12 @@ classdef SLAM_Controller < handle
         min_ir_reading;
         blinking_rate;
         is_calibrated;
+
+        MAX_SIZE;
+        MIN_SIZE;
+        
+        MAX_HALL;
+        MIN_HALL;
     end
     properties (Constant = true)
         KP_RPM = 0.05;
@@ -30,6 +36,15 @@ classdef SLAM_Controller < handle
 
         MOTOR_L = 4;
         MOTOR_R = 3;
+        
+        SERVO = 0;
+    
+        BAD_BLOCK = 0;
+        GOOD_BLOCK = 1;
+        EXCELLENT_BLOCK = 2;
+
+        HALL_EFFECT = 1;
+        SERVO_ANALOG = 2;
     end
     methods
         function obj = SLAM_Controller(body)
@@ -106,6 +121,17 @@ classdef SLAM_Controller < handle
                 case States.Fork % Follow a path, tie break tbd, if the path leads to a destination node that has not been visited.
                     ;
                 case States.GraspItem % Pd? control for grasping the object
+                    obj.body.startStream('analog');
+                    success = false;
+                    size = 0;
+                    while(not(success))
+                        obj.body.servo(obj.SERVO,0);
+                        pause(2);
+                        [success, block_features] = obj.pickUpAndAnalyzeBlock();
+                    end
+                    predicted_block_type = obj.classifier.predict(block_features);
+                    obj.changeState(predicted_block_type);
+                    pause(0.1);
                     ;
                 case States.TurnAround % Pd? control for rotating the robot a complete 180
                     tic;
@@ -129,7 +155,9 @@ classdef SLAM_Controller < handle
                     ;
             end
         end
-
+        function val = normalize_val(obj,in, max, min)
+            val = (in - min)./max;
+        end
         function val = normalize_IR_reading(obj, reading)
             val = (reading - obj.min_ir_reading)./ (obj.max_ir_reading - obj.min_ir_reading);
         end
@@ -278,14 +306,15 @@ classdef SLAM_Controller < handle
                 bool = bool || (reading(sensors(i)) >= min_avg + 200);
             end
         end
-        function success = pickUpBlock(obj)
+        function [success, block_features] = pickUpAndAnalyzeBlock(obj)
             
             previousAnalogVal = 0;
             currentAnalogVal = 0;
             success = true;
+            block_features = zeros(5,1);
             for i = 10:10:180
-                r.servo(4, i);
-                currentAnalogVal = r.getAverageData('analog', 5);
+                obj.body.servo(4, i);
+                currentAnalogVal = obj.body.getAverageData('analog', 5);
                 pause(0.1);
                 highTresh = 0;
                 lowTresh = 0;
@@ -300,15 +329,15 @@ classdef SLAM_Controller < handle
                     try
                         %s 47 i 140, m 35 i 110 , B 23 i 80
                         if (i <= 80 )
-                            r.servo(4, i - 23); %s 47 m 35 , B 23
+                            obj.body.servo(4, i - 23); %s 47 m 35 , B 23
                             size = i - 23;
                             break;
                         elseif(i > 80 && i < 115)
-                            r.servo(4, i - 30);
+                            obj.body.servo(obj.SERVO, i - 30);
                             size = i - 30;
                             break;
                         else
-                            r.servo(4, i - 25);
+                            obj.body.servo(obj.SERVO, i - 25);
                             size = i - 25;
                             break;
                         end
@@ -321,6 +350,24 @@ classdef SLAM_Controller < handle
             end
             if(i == 180)
                 success = false
+                return;
+            end
+            [r,g,b] = obj.body.rgbRead();
+            AnalogData = obj.body.getAverageData('analog',5);
+            pause(0.01);
+
+            block_features(5) = obj.normalize_val(size, obj.MAX_SIZE, obj.MIN_SIZE);
+            block_features(4:2) = obj.normalize_val([r,g,b]',255,0);
+            block_features(1) = obj.normalize_val(AnalogData(obj.HALL_EFFECT), obj.MAX_HALL, obj.MIN_HALL);
+        end
+        function changeState(obj,block_id)
+            switch(block_id)
+                case obj.BAD_BLOCK
+                    return;
+                case obj.GOOD_BLOCK
+                    return;
+                case obj.EXCELLENT_BLOCK
+                    return;
             end
         end
     end

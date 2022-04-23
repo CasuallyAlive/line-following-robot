@@ -4,6 +4,7 @@ clear; clc; close all; % initialization
 r = MKR_MotorCarrier;
 load("training_examples.mat");
 load("Y.mat");
+load("CONSTS.mat");
 %% Train Model
 classes = unique(Y);
 
@@ -17,6 +18,10 @@ mdl_svm.predict(training_examples(:,140)')
 
 controller = SLAM_Controller(MKR_MotorCarrier);
 controller.classifier = mdl_svm;
+controller.MAX_SIZE = CONSTS(1);
+controller.MIN_SIZE = CONSTS(2);
+controler.MAX_HALL = CONSTS(3);
+controller.MIN_HALL = CONSTS(4);
 %% Main loop for SLAM traversal
 
 start_robot = false;
