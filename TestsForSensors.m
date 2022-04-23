@@ -222,3 +222,53 @@ while round(-2*ir_normalized(1) - ir_normalized(2) + ir_normalized(3) + 2*ir_nor
 end
 r.motor(3,0);
 r.motor(4,0);
+%%
+r.startStream('analog');
+%%
+
+previousAnalogVal = 0;
+currentAnalogVal = 0;
+success = true;
+for i = 10:10:180
+    r.servo(4, i);
+    currentAnalogVal = r.getAverageData('analog', 5);
+    pause(0.1);
+    highTresh = 0;
+    lowTresh = 0;
+    if( i < 50)
+        highTresh =  (previousAnalogVal + 0.02);
+        lowTresh =  (previousAnalogVal - 0.02);
+    else
+        highTresh =  (previousAnalogVal + 10);
+        lowTresh =  (previousAnalogVal - 10);
+    end
+    if( (currentAnalogVal(2) <= highTresh ) && (currentAnalogVal(2)>= lowTresh ) )
+        try
+            %s 47 i 140, m 35 i 110 , B 23 i 80
+            if (i <= 80 )
+                r.servo(4, i - 23); %s 47 m 35 , B 23
+                size = i - 23;
+                break;
+            elseif(i > 80 && i < 115)
+                r.servo(4, i - 30);
+                size = i - 30;
+                break;
+            else
+                r.servo(4, i - 25);
+                size = i - 25;
+                break;
+            end
+        catch
+            success = false;
+            return;
+        end
+    end
+    previousAnalogVal = currentAnalogVal(2);
+end
+if(i == 180)
+    success = false
+end
+%%
+r.servo(4,0);
+%%
+r.stopStream('analog');  

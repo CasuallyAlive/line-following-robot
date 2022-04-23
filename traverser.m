@@ -11,7 +11,8 @@ t = templateSVM('Standardize',true,'KernelFunction','polynomial');
 
 mdl_svm  = fitcecoc(training_examples', Y,'Learners',t, 'FitPosterior',true,...
     'ClassNames', classes);
-
+%% Test Model
+mdl_svm.predict(training_examples(:,140)')
 %% Declare Robot Controller
 
 controller = SLAM_Controller(MKR_MotorCarrier);

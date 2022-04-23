@@ -3,7 +3,7 @@ clear; clc; close all; instrreset;
 r = MKR_MotorCarrier;
 %% Define boxes, count, and setup for saving data
 blockClass = [0 1 2]; % Zero bad, One good, 2 Excellent
-trialCount = 1;
+trialCount = 25;
 %trialCount = 6;
 saveDirectory = [pwd, '\data'];
 
@@ -20,7 +20,7 @@ blue = 0;
 ClawSize = 0;
 % readings = zeros(3, 1);
 readings = zeros(5, 1);
-a = 1;
+a = 3;
 b = 1;
 BadMin = zeros(5,1);
 BadMax = zeros(5,1);
@@ -31,7 +31,7 @@ ExcelMax = zeros(5,1);
 first = true;
 
 
-for class = 1:3
+for class = 3:3
 % Begin gathering data
 if(class == 1)
     countdown("Beginning Recording Bad blocks in", 3);
@@ -41,7 +41,13 @@ else
     countdown("Beginning Recording Excellent blocks in", 3);
 end
 for x = 1:trialCount
-    fprintf("Please Place Bad Block, Trial No. %d\n", x);
+    if(class == 1)
+        fprintf("Please Place Bad Block, Trial No. %d\n", x);
+    elseif(class == 2)
+        fprintf("Please Place Good Block, Trial No. %d\n", x);
+    else
+        fprintf("Please Place Excellent Block, Trial No. %d\n", x);
+    end
     while(input("Start recording\n","s") ~= "start")
     end
     fprintf("reading data");
@@ -77,76 +83,6 @@ end
 a = a + 1;
 b = 1;
 first = true;
-end
-countdown("Beginning Recording Good Block in", 3);
-for x = 1:trialCount
-    fprintf("Please Place Good Block, Trial No. %d\n", x);
-    pause(10);
-    fprintf("reading data");
-    [red, green, blue] = r.rgbRead();
-    AnalogData = r.getAverageData('analog', 10);
-    ClawSize = CloseClaw(r);
-    pause(0.2)
-
-        readings(1, 1) = AnalogData(1);
-        readings(2, 1) = red;
-        readings(3, 1) = green;
-        readings(4, 1) = blue;
-        readings(5, 1) = ClawSize;
-%     readings(1,1) = AnalogData(1);
-%     readings(2,1) = red + blue + green;
-%     readings(3,1) = ClawSize;
-
-    if(first == true)
-        GoodMin = readings;
-        GoodMax = readings;
-        first = false;
-    else
-        GoodMin = CalcNewMins(readings, GoodMin);
-        GoodMax = CalcNewMaxs(readings, GoodMax);
-    end
-
-    data{a, b} = readings;
-    b = b + 1;
-    pause(0.5);
-    clc;
-end
-
-a = a +1;
-b = 1;
-first = true;
-countdown("Beginning Recording Excellent blocks in", 3);
-for x = 1:trialCount
-    fprintf("Please Place Excellent Block, Trial No. %d\n", x);
-    pause(10);
-    fprintf("reading data");
-    [red, green, blue] = r.rgbRead();
-    AnalogData = r.getAverageData('analog', 10);
-    ClawSize = CloseClaw(r);
-    pause(0.2)
-
-        readings(1, 1) = AnalogData(1);
-        readings(2, 1) = red;
-        readings(3, 1) = green;
-        readings(4, 1) = blue;
-        readings(5, 1) = ClawSize;
-%     readings(1,1) = AnalogData(1);
-%     readings(2,1) = red + green + blue;
-%     readings(3,1) = ClawSize;
-
-    if(first == true)
-        ExcelMin = readings;
-        ExcelMax = readings;
-        first = false;
-    else
-        ExcelMin = CalcNewMins(readings, ExcelMin);
-        ExcelMax = CalcNewMaxs(readings, ExcelMax);
-    end
-
-    data{a, b} = readings;
-    b = b + 1;
-    pause(0.5);
-    clc;
 end
 
 r.stopStream('analog');  % stop streaming accelerometer
@@ -231,7 +167,6 @@ K = LDA.Coeffs(1, 2).Const;
 L = LDA.coeffs(1, 2).Linear;
 f = @(x1, x2, x3) K + L(1)*x1 + L(2)*x2 +  L(3)*x3;
 h2 = fimplicit(f, limits);
-
 %% get raw data
 
 training_examples_ideal = zeros(5,75);
@@ -245,9 +180,6 @@ for row = 1:3
         i = i+1;
     end
 end
-
-size_b = training_examples_ideal(5,:);
-training_examples_ideal(5,:) = (size_b - min(size_b))./(max(size_b) - min(size_b)); %normalize size
 
 i = 1;
 for row = 1:3
@@ -272,6 +204,9 @@ end
 %% Normalize data
 colors = (training_examples_ideal(2:4,:));
 hall_effect = training_examples(1,:);
+
+size_b = training_examples(5,:);
+training_examples(5,:) = (size_b - min(size_b))./(max(size_b) - min(size_b)); %normalize size
 
 training_examples(2:4,:) = training_examples(2:4,:)./255; %normalize colors
 training_examples(1,:) = (training_examples(1,:) - min(hall_effect))./(max(hall_effect) - min(hall_effect));
@@ -338,12 +273,17 @@ for cat = 1:3
 end
 
 classes = unique(Y);
+
+%%
+X(:,1:150) = training_examples_1;
+X(:,151:300) = training_examples;
+Result(:,1:150) = Y;
+Result(:,151:300) = Y;
 %% SVM
 t = templateSVM('Standardize',true,'KernelFunction','polynomial');
 
-model = fitcecoc(train_set', Y_train,'Learners',t, 'FitPosterior',true,...
+model = fitcecoc(training_examples', Y,'Learners',t, 'FitPosterior',true,...
     'ClassNames', classes);
-
 %% Test 
 correct = 0;
 for i = 1:18
