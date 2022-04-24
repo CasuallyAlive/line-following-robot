@@ -103,6 +103,7 @@ classdef SLAM_Controller < handle
                     
                     control_M1 = 0; control_M2 = 0;
                     error_IR = 0; prev_error_IR = 0;
+                    Threshold = 100;
                     tic;
                     while not(obj.isFork(ir_reading))
                         [error_IR, control_M1, control_M2] = obj.ir_PD_Controller(obj.normalize_IR_reading(ir_reading),prev_error_IR);
@@ -113,7 +114,21 @@ classdef SLAM_Controller < handle
                         obj.body.motor(obj.MOTOR_L, round(control_M2));
                         prev_error_IR = error_IR;
                         ir_reading = obj.body.readReflectance();
-                        
+
+                        if(not(obj.line_within_proximity(ir_reading,[1,2,3,4])))
+                            Threshold = Threshold - 1;
+                            if(Threshold <= 0)
+                                obj.stopMotors();
+                                while(not(obj.line_in_sight(ir_reading,[2,3])))
+                                    ir_reading = obj.body.readReflectance();
+                                    pause(0.0001);
+                                end
+                                pause(0.1);
+                                Threshold = 100;
+                            end
+                        else
+                            Threshold = 100;
+                        end
                     end
                     
                     % Hit fork
@@ -201,17 +216,6 @@ classdef SLAM_Controller < handle
                         obj.state = States.TurnAround;
                     end
                     ;
-                    
-%                 case States.BranchOne
-%                     disp("branch 1 \n");
-%                     pause(1);
-%                     obj.TurnToBranchX(1);
-%                     
-%                     obj.previousState = States.BranchOne;
-%                     obj.state = States.FollowLineForward;
-%                     
-%                     
-%                     ;
                 case States.GraspItem % Pd? control for grasping the object
                     
                     disp("I picked a Box");
@@ -291,8 +295,7 @@ classdef SLAM_Controller < handle
             
             while toc < runtime
             end
-            obj.body.motor(obj.MOTOR_R, 0);
-            obj.body.motor(obj.MOTOR_L,0);
+            obj.stopMotors();
         end
         function Turn90DegreeLeft(obj)
             runtime = 2.5;
@@ -301,8 +304,7 @@ classdef SLAM_Controller < handle
             obj.body.motor(obj.MOTOR_L, obj.TARGET_RPM);
             while(toc < runtime)
             end
-            obj.body.motor(obj.MOTOR_R, 0);
-            obj.body.motor(obj.MOTOR_L, 0);
+            obj.stopMotors();
         end
         function TurnToBranchX(obj, count)
             disp('Turning');
@@ -317,12 +319,13 @@ classdef SLAM_Controller < handle
                     if(currentCount == count)
                         break;
                     end
-                    pause(0.2);
+                    obj.stopMotors();
+                    pause(0.1);
+                    obj.body.motor(obj.MOTOR_R, round(obj.TARGET_RPM * obj.R_MOTOR_SF));
+                    obj.body.motor(obj.MOTOR_L, round(-obj.TARGET_RPM));
                 end
-                pause(0.1);
             end
-            obj.body.motor(obj.MOTOR_R, 0);
-            obj.body.motor(obj.MOTOR_L, 0);
+            obj.stopMotors();
         end
         
         function val = normalize_IR_reading(obj, reading)
@@ -408,13 +411,16 @@ classdef SLAM_Controller < handle
         end
         function val = isFork(obj, ir_reading)
             normalized_ir = obj.normalize_IR_reading(ir_reading);
-            val = obj.valThreshold(normalized_ir(1), 1, 0.5) && ...
-                obj.valThreshold(normalized_ir(2), 1, 0.5) && ...
-                obj.valThreshold(normalized_ir(3), 1, 0.5) && ...
-                obj.valThreshold(normalized_ir(4), 1, 0.5);
+            val = obj.valThresholdG(normalized_ir(1), 1, 0.5) && ...
+                obj.valThresholdG(normalized_ir(2), 1, 0.5) && ...
+                obj.valThresholdG(normalized_ir(3), 1, 0.5) && ...
+                obj.valThresholdG(normalized_ir(4), 1, 0.5);
         end
-        function val = valThreshold(obj, i, j, padding)
+        function val = valThresholdG(obj, i, j, padding)
             val = i >= (j - padding);
+        end
+        function val = valThresholdL(obj, i, j, padding)
+            val = i <= (j + padding);
         end
         function ScaleFactor = FindSF(obj,inputVal)
             if inputVal >= 0 && inputVal < 10
@@ -521,16 +527,20 @@ classdef SLAM_Controller < handle
         function bool = line_within_proximity(obj, reading, sensors)
             max_avg = mean(obj.max_ir_reading);
             bool = false;
-            for i = size(sensors,2)
-                bool = bool || obj.valThreshold(reading(sensors(i)),max_avg,500);
+            for i = length(sensors)
+                bool = bool || obj.valThresholdG(reading(sensors(i)),max_avg,(3/4).*max_avg);
             end
         end
         function bool = line_in_sight(obj, reading, sensors)
             max_avg = mean(obj.max_ir_reading);
             bool = true;
-            for i = size(sensors,2)
-                bool = bool && obj.valThreshold(reading(sensors(i)),max_avg,(3/4).*max_avg);
+            for i = length(sensors)
+                bool = bool && obj.valThresholdG(reading(sensors(i)),max_avg,(3/4).*max_avg);
             end
+        end
+        function stopMotors(obj)
+            obj.body.motor(obj.MOTOR_L,0);
+            obj.body.motor(obj.MOTOR_R,0);
         end
     end
 end
