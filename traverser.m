@@ -16,7 +16,7 @@ mdl_svm  = fitcecoc(training_examples', Y,'Learners',t, 'FitPosterior',true,...
 mdl_svm.predict(training_examples(:,140)')
 %% Declare Robot Controller
 
-controller = SLAM_Controller(MKR_MotorCarrier);
+controller = SLAM_Controller(r);
 controller.classifier = mdl_svm;
 controller.MAX_SIZE = CONSTS(1);
 controller.MIN_SIZE = CONSTS(2);

@@ -20,6 +20,10 @@ classdef SLAM_Controller < handle
         hasBox;
         findingBox;
         %Facing enum?
+        MAX_SIZE
+        MIN_SIZE
+        MAX_HALL
+        MIN_HALL
     end
     properties (Constant = true)
         KP_RPM = 0.05;
@@ -31,6 +35,7 @@ classdef SLAM_Controller < handle
         KI_IR = 0.0;
         
         TARGET_RPM = 10;
+        
         MAX_RPM = 30;
         TARGET_IR_READING = 0;
         
@@ -100,7 +105,6 @@ classdef SLAM_Controller < handle
                     error_IR = 0; prev_error_IR = 0;
                     tic;
                     while not(obj.isFork(ir_reading))
-                        %                         [curr_error_M1, curr_error_M2, control_M1, control_M2] = obj.keepTargetSpeed_PD(prev_error_M1, prev_error_M2, prev_control_M1, prev_control_M2);
                         [error_IR, control_M1, control_M2] = obj.ir_PD_Controller(obj.normalize_IR_reading(ir_reading),prev_error_IR);
                         
                         [control_M1, control_M2] = obj.setMotorSpeeds(control_M1, control_M2);
@@ -109,9 +113,10 @@ classdef SLAM_Controller < handle
                         obj.body.motor(obj.MOTOR_L, round(control_M2));
                         prev_error_IR = error_IR;
                         ir_reading = obj.body.readReflectance();
+                        
                     end
                     
-                    % Hitted fork
+                    % Hit fork
                     obj.body.motor(obj.MOTOR_R, 0);
                     obj.body.motor(obj.MOTOR_L, 0);
                     
@@ -212,7 +217,7 @@ classdef SLAM_Controller < handle
                     disp("I picked a Box");
                     obj.hasBox = true;
                     obj.findingBox = false;
-                    obj.MoveForward(3);
+                    obj.MoveForward(2);
                     obj.state = States.GoBack;
                     obj.previousState = States.GraspItem;
                     
@@ -221,7 +226,7 @@ classdef SLAM_Controller < handle
                     disp("Turning around \n");
                     tic;
                     obj.body.motor(obj.MOTOR_R, round(obj.TARGET_RPM * obj.R_MOTOR_SF));
-                    obj.body.motor(obj.MOTOR_L, - obj.TARGET_RPM);
+                    obj.body.motor(obj.MOTOR_L, - round(obj.TARGET_RPM));
                     pause(1.5);
                     while(obj.line_within_proximity(obj.body.readReflectance, [1,2,3,4]))
                         pause(0.0001);
@@ -265,6 +270,7 @@ classdef SLAM_Controller < handle
                     
                     obj.state = States.TurnAround;
                     ;
+                    
             end
         end
         
@@ -302,14 +308,11 @@ classdef SLAM_Controller < handle
             disp('Turning');
             currentCount = 0;
             obj.body.motor(obj.MOTOR_R, round(obj.TARGET_RPM * obj.R_MOTOR_SF));
-            obj.body.motor(obj.MOTOR_L, -obj.TARGET_RPM);
-            %             pause(0.5);
-            if(count == 1)
-                
-            end
+            obj.body.motor(obj.MOTOR_L, round(-obj.TARGET_RPM));
+            
             while(currentCount < count)
                 values = obj.body.readReflectance();
-                if(values(2) > (obj.min_ir_reading(2) + 100) && values(3) > (obj.min_ir_reading(3) + 100)) % this will probably need padding
+                if(obj.line_in_sight(values,[2,3])) % this will probably need padding
                     currentCount = currentCount + 1;
                     if(currentCount == count)
                         break;
@@ -516,10 +519,17 @@ classdef SLAM_Controller < handle
             end
         end
         function bool = line_within_proximity(obj, reading, sensors)
-            min_avg = mean(obj.min_ir_reading);
+            max_avg = mean(obj.max_ir_reading);
             bool = false;
-            for i = length(sensors)
-                bool = bool || (reading(sensors(i)) >= min_avg + 200);
+            for i = size(sensors,2)
+                bool = bool || obj.valThreshold(reading(sensors(i)),max_avg,500);
+            end
+        end
+        function bool = line_in_sight(obj, reading, sensors)
+            max_avg = mean(obj.max_ir_reading);
+            bool = true;
+            for i = size(sensors,2)
+                bool = bool && obj.valThreshold(reading(sensors(i)),max_avg,(3/4).*max_avg);
             end
         end
     end
