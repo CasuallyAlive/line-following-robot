@@ -20,7 +20,7 @@ blue = 0;
 ClawSize = 0;
 % readings = zeros(3, 1);
 readings = zeros(5, 1);
-a = 3;
+a = 1;
 b = 1;
 BadMin = zeros(5,1);
 BadMax = zeros(5,1);
@@ -31,7 +31,7 @@ ExcelMax = zeros(5,1);
 first = true;
 
 
-for class = 3:3
+for class = 1:3
 % Begin gathering data
 if(class == 1)
     countdown("Beginning Recording Bad blocks in", 3);
@@ -168,39 +168,18 @@ L = LDA.coeffs(1, 2).Linear;
 f = @(x1, x2, x3) K + L(1)*x1 + L(2)*x2 +  L(3)*x3;
 h2 = fimplicit(f, limits);
 %% get raw data
-
-training_examples_ideal = zeros(5,75);
-training_examples_unideal = zeros(5,75);
+training_examples_raw = zeros(5,75);
 
 i = 1;
-for row = 1:3
+for row = 3:5
     temp = cell2mat(data(row,:));
     for col = temp
-        training_examples_ideal(:,i) = col;
+        training_examples_raw(:,i) = col;
         i = i+1;
     end
 end
 
-i = 1;
-for row = 1:3
-    temp = cell2mat(data_2(row,:));
-    for col = temp
-        training_examples_unideal(:,i) = col;
-        i = i+1;
-    end
-end
-
-training_examples = zeros(5,150);
-i = 1; j = 1;
-for col = 1:150
-    if(mod(col,2) == 0)
-        training_examples(:,col) = training_examples_unideal(:,i);
-        i = i+1;
-    else
-        training_examples(:,col) = training_examples_ideal(:,j);
-        j = j+1;
-    end
-end
+training_examples = training_examples_raw;
 %% Normalize data
 MAX_SIZE = max(training_examples(5,:));
 MIN_SIZE = min(training_examples(5,:));
@@ -210,7 +189,7 @@ MIN_HALL = min(training_examples(1,:));
 
 CONSTS = [MAX_SIZE,MIN_SIZE,MAX_HALL,MIN_HALL];
 
-colors = (training_examples_ideal(2:4,:));
+colors = (training_examples_raw(2:4,:));
 hall_effect = training_examples(1,:);
 
 size_b = training_examples(5,:);
@@ -224,10 +203,10 @@ hall_effect = training_examples(1,:);
 size_b = training_examples(5,:);
 % coef = pca(colors);
 
-Y = zeros(1,150);
-Y(1:50) = 0; %% bad == 0
-Y(51:100) = 1; %% good == 1
-Y(101:150) = 2; %% excellent == 2
+Y = zeros(1,75);
+Y(1:25) = 0; %% bad == 0
+Y(26:50) = 1; %% good == 1
+Y(51:75) = 2; %% excellent == 2
 
 %% Visualization red
 % scatter3(hall_effect(1:25), size(1:25), colors(1,1:25),50, "red", 'o') % bad
@@ -258,21 +237,21 @@ Y(101:150) = 2; %% excellent == 2
 % scatter3(hall_effect(51:75), size(51:75), coef(51:75,1)',50, "green", '*') % excellent
 
 %% separate into training and testing sets
-train_set = zeros(5,132);
-test_set = zeros(5,18);
-Y_train = zeros(1,132);
-Y_test = zeros(1,18);
+train_set = zeros(5,65);
+test_set = zeros(5,10);
+Y_train = zeros(1,65);
+Y_test = zeros(1,10);
 
 i = 1; j = 1;
 for cat = 1:3
-    offset = 44*(cat-1);
-    for col = 1:44
+    offset = 15*(cat-1);
+    for col = 1:15
         train_set(:,i) = training_examples(:,col + offset);
         Y_train(:,i) = Y(:,col + offset);
 
         i = i+1;
     end
-    for col = 45:50
+    for col = 16:25
         test_set(:,j) = training_examples(:, col + offset);
         Y_test(:,j) = Y(:,col + offset);
 
@@ -294,13 +273,13 @@ model = fitcecoc(training_examples', Y,'Learners',t, 'FitPosterior',true,...
     'ClassNames', classes);
 %% Test 
 correct = 0;
-for i = 1:18
+for i = 1:10
     result = model.predict(test_set(:,i)') == Y_test(i);
     if(result == true)
         correct = correct +1;
     end
 end
-acc = round(correct./18*100);
+acc = round(correct./10*100);
 fprintf("Accuracy %d\n", acc);
 %% Claw Code Function
 function size = CloseClaw(obj)

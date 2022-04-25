@@ -17,6 +17,7 @@ classdef SLAM_Controller < handle
         previousBranch;
         branchCheck;
         branchChoice;
+        branchFailed;
         hasBox;
         findingBox;
         boxType;
@@ -28,7 +29,7 @@ classdef SLAM_Controller < handle
         
     end
     properties (Constant = true)
-        KP_RPM = 0.05;
+        KP_RPM = 0.055;
         KD_RPM = 0.005;
         KI_RPM = 0.0;
         
@@ -41,7 +42,7 @@ classdef SLAM_Controller < handle
         MAX_RPM = 30;
         TARGET_IR_READING = 0;
         
-        R_MOTOR_SF = 0.9;
+        R_MOTOR_SF = 0.95;
         
         MOTOR_L = 4;
         MOTOR_R = 3;
@@ -73,7 +74,8 @@ classdef SLAM_Controller < handle
             obj.currentBranch = 0;
             obj.previousBranch = 0;
             obj.branchCheck = ones(1,4);
-            obj.branchChoice = 1;
+            obj.branchChoice = 4;1
+            obj.branchFailed = false;%
             obj.boxType = nan;
             obj.body.servo(obj.SERVO,0);
         end
@@ -119,7 +121,7 @@ classdef SLAM_Controller < handle
                     
                     control_M1 = 0; control_M2 = 0;
                     error_IR = 0; prev_error_IR = 0;
-                    Threshold = 25;
+                    Threshold = 100;
                     tic;
                     while not(obj.isFork(ir_reading))
                         [error_IR, control_M1, control_M2] = obj.ir_PD_Controller(obj.normalize_IR_reading(ir_reading),prev_error_IR);
@@ -135,15 +137,15 @@ classdef SLAM_Controller < handle
                             Threshold = Threshold - 1;
                             if(Threshold <= 0)
                                 obj.stopMotors();
-                                while(not(obj.line_in_sight(ir_reading,[2,3])))
+                                while(not(obj.line_within_proximity(ir_reading,[2,3])))
                                     ir_reading = obj.body.readReflectance();
                                     pause(0.0001);
                                 end
                                 pause(0.1);
-                                Threshold = 25;
+                                Threshold = 100;
                             end
                         else
-                            Threshold = 25;
+                            Threshold = 100;
                         end
                     end
                     
@@ -174,27 +176,31 @@ classdef SLAM_Controller < handle
 %                             obj.currentBranch = 5;
 %                             obj.state = States.FollowLineForward;
                             if(obj.boxType == 0)
-                                obj.MoveForward(2);
+                                obj.MoveForward(2.5);
                                 obj.Turn90DegreeLeft();
                                 pause(2);
                                 obj.TurnToBranchX(2);
                                 obj.previousBranch = obj.currentBranch;
-                                obj.currentBranch = 5;
+                                obj.currentBranch = 6;
                                 obj.state = States.FollowLineForward;
                             else
-                                obj.MoveForward(2);
+                                obj.MoveForward(2.5);
                                 obj.Turn90DegreeLeft();
                                 pause(2);
                                 obj.TurnToBranchX(1);
                                 obj.previousBranch = obj.currentBranch;
-                                obj.currentBranch = 6;
+                                obj.currentBranch = 5;
                                 obj.state = States.FollowLineForward;
                             end
+                        elseif(obj.branchFailed)%
+                            obj.branchFailed = false;%
+                            obj.body.servo(obj.SERVO, 0);
+                            obj.state = States.TurnAround;%
                         % Else
                         else
                             % choose one of the branches from 1 to 4
                             % Move and turn to that branch
-                            obj.MoveForward(2);
+                            obj.MoveForward(2.3);
                             if(obj.branchCheck(obj.branchChoice) ~= 1)
                                 obj.branchChoice = obj.branchChoice + 1;
                             end
@@ -204,7 +210,7 @@ classdef SLAM_Controller < handle
                             obj.previousBranch = obj.currentBranch;
                             obj.currentBranch = obj.branchChoice;
                             obj.branchChoice = obj.branchChoice + 1;
-                            if(obj.branchChoice == 4)
+                            if(obj.branchChoice == 5)
                                 obj.branchChoice = 1;
                             end
                             
@@ -215,10 +221,14 @@ classdef SLAM_Controller < handle
                     elseif(obj.currentBranch >= 1 && obj.currentBranch <= 4)
                         % If we are trying to find box
                         if(obj.findingBox)
-                            % go to find box state
-                            obj.state = States.GraspItem; % graspItem incomplete needs to move forward
-                            % in grasp item we need to set findingBox to
-                            % false
+                            if(obj.branchFailed == true)%
+                                obj.ReturnToZero();%
+                            else
+                                % go to find box state
+                                obj.state = States.GraspItem; % graspItem incomplete needs to move forward
+                                % in grasp item we need to set findingBox to
+                                % false
+                            end
                         % Else
                         else
                             obj.ReturnToZero();
@@ -232,7 +242,11 @@ classdef SLAM_Controller < handle
                         % else
                         else
                             % move back to branch zero
-                            obj.ReturnToZero();
+                            if(obj.currentBranch == 6)
+                                obj.ReturnToZeroFrom6();
+                            else
+                                obj.ReturnToZero();
+                            end
                         end
                     end
                   ;
@@ -252,28 +266,38 @@ classdef SLAM_Controller < handle
                 case States.GraspItem % Pd? control for grasping the object
                     
 %                     disp("I picked a Box");
-                    obj.MoveForward(2);
+                    obj.MoveForward(3);
                     obj.state = States.GoBack;
 %                     obj.previousState = States.GraspItem;
                     obj.body.startStream('analog');
                     success = false;
                     size = 0;
+                    attempts = 3;%
+                    currentAttempts = 0;%
                     while(not(success))
                         obj.body.servo(obj.SERVO,0);
                         pause(2);
                         [success, block_features] = obj.pickUpAndAnalyzeBlock();
-                        if(success == false)
-                            distanceDetected = obj.body.ultrasonicPulse() * 0.0172;
-                            if(distanceDetected > (obj.SF_ULTRASON * 5 * 2.54))
-                                obj.branchCheck(obj.currentBranch) = 0;
-                            end
+                        if(success == false)%
+                              currentAttempts = currentAttempts +1;%
+                              if(currentAttempts == attempts)%
+                                    obj.branchCheck(obj.currentBranch) = 0;%
+                                    obj.branchFailed = true;%
+                                    break;
+                              end%
+%                             distanceDetected = obj.body.ultrasonicPulse() * 0.0172;
+%                             if(distanceDetected > (obj.SF_ULTRASON * 5 * 2.54))
+%                                 obj.branchCheck(obj.currentBranch) = 0;
+%                             end
                         end
                     end
-                    predicted_block_type = obj.classifier.predict(block_features');
-                    obj.boxType = predicted_block_type;
-                    obj.hasBox = true;
-                    obj.findingBox = false;
-                    display(obj.boxType);
+                    if(~obj.branchFailed)
+                        predicted_block_type = obj.classifier.predict(block_features');
+                        obj.boxType = predicted_block_type;
+                        obj.hasBox = true;
+                        obj.findingBox = false;
+                        display(obj.boxType);
+                    end
 %                     obj.changeState(predicted_block_type);
                     pause(0.1);
                     ;
@@ -340,6 +364,18 @@ classdef SLAM_Controller < handle
             obj.Turn90DegreeLeft();
             obj.state = States.TurnAround;
         end
+        
+        function ReturnToZeroFrom6(obj)
+            obj.previousBranch = obj.currentBranch;
+            obj.currentBranch = 0;
+            %       Turn back into branch zero and keep moving
+            obj.MoveForward(2.3);
+            %       forward or re orient the robot to choose a new
+            %       path
+            obj.Turn90AlitleMoreDegreeLeft();
+            obj.state = States.TurnAround;
+            
+        end
         function MoveForward(obj,runtime)
             tic
             obj.body.motor(obj.MOTOR_R, round(obj.TARGET_RPM * obj.R_MOTOR_SF));
@@ -358,25 +394,44 @@ classdef SLAM_Controller < handle
             end
             obj.stopMotors();
         end
+        
+        function Turn90AlitleMoreDegreeLeft(obj)
+            runtime = 3.3;
+            tic;
+            obj.body.motor(obj.MOTOR_R, -round(obj.TARGET_RPM * obj.R_MOTOR_SF));
+            obj.body.motor(obj.MOTOR_L, obj.TARGET_RPM);
+            while(toc < runtime)
+            end
+            obj.stopMotors();
+        end
         function TurnToBranchX(obj, count)
             disp('Turning');
             currentCount = 0;
             obj.body.motor(obj.MOTOR_R, round(obj.TARGET_RPM * obj.R_MOTOR_SF));
             obj.body.motor(obj.MOTOR_L, round(-obj.TARGET_RPM));
+            passed_branch = true;
             
             while(currentCount < count)
                 values = obj.body.readReflectance();
                 obj.stopMotors();
-                pause(0.01);
+                pause(0.001);
                 obj.body.motor(obj.MOTOR_R, round(obj.TARGET_RPM * obj.R_MOTOR_SF));
                 obj.body.motor(obj.MOTOR_L, round(-obj.TARGET_RPM));
-                if(obj.line_in_sight(values,[2,3])) % this will probably need padding
+                if(obj.line_within_proximity(values,[2,3]) && passed_branch) % this will probably need padding
                     currentCount = currentCount + 1;
                     if(currentCount == count)
                         break;
                     end
-                    pause(0.2);
+                    passed_branch = false;
+                    pause(0.5);
+
+                elseif(not(passed_branch) && obj.line_not_in_sight(values, [2,3]))
+                    passed_branch = true;
                 end
+            end
+            if(count == 4)
+               obj.body.motor(obj.MOTOR_R, 0);
+               pause(0.5);
             end
             obj.stopMotors();
         end
@@ -587,14 +642,21 @@ classdef SLAM_Controller < handle
             max_avg = mean(obj.max_ir_reading);
             bool = false;
             for i = length(sensors)
-                bool = bool || obj.valThresholdG(reading(sensors(i)),max_avg,(1/4).*max_avg);
+                bool = bool || obj.valThresholdG(reading(sensors(i)),max_avg,(2/5).*max_avg);
             end
         end
         function bool = line_in_sight(obj, reading, sensors)
             max_avg = mean(obj.max_ir_reading);
             bool = true;
             for i = length(sensors)
-                bool = bool && obj.valThresholdG(reading(sensors(i)),max_avg,(1/4).*max_avg);
+                bool = bool && obj.valThresholdG(reading(sensors(i)),max_avg,(2/5).*max_avg);
+            end
+        end
+        function bool = line_not_in_sight(obj, reading, sensors)
+            min_avg = mean(obj.min_ir_reading);
+            bool = true;
+            for i = length(sensors)
+                bool = bool && obj.valThresholdL(reading(sensors(i)),min_avg,(3/5).*min_avg);
             end
         end
         function stopMotors(obj)

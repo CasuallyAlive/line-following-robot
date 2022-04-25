@@ -81,9 +81,25 @@ end
 
 %%
 r = MKR_MotorCarrier;
-load("training_examples.mat");
+load("training_examples_raw.mat");
 load("Y.mat");
-load("CONSTS.mat");
+
+training_examples = training_examples_raw;
+
+MAX_SIZE = max(training_examples(5,:));
+MIN_SIZE = min(training_examples(5,:));
+
+MAX_HALL = max(training_examples(1,:));
+MIN_HALL = min(training_examples(1,:));
+
+CONSTS = [MAX_SIZE,MIN_SIZE,MAX_HALL,MIN_HALL];
+hall_effect = training_examples(1,:);
+
+size_b = training_examples(5,:);
+training_examples(5,:) = (size_b - min(size_b))./(max(size_b) - min(size_b)); %normalize size
+
+training_examples(2:4,:) = training_examples(2:4,:)./255; %normalize colors
+training_examples(1,:) = (training_examples(1,:) - min(hall_effect))./(max(hall_effect) - min(hall_effect));
 %% Train Model
 classes = unique(Y);
 
