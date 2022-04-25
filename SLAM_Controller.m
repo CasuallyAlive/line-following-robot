@@ -376,7 +376,7 @@ classdef SLAM_Controller < handle
             end
             obj.stopMotors();
         end
-        
+       
         function val = normalize_IR_reading(obj, reading)
              val = (reading - obj.min_ir_reading)./ (obj.max_ir_reading - obj.min_ir_reading);
         end
@@ -488,7 +488,9 @@ classdef SLAM_Controller < handle
                 ScaleFactor = 1.1556;
             end
         end
-        
+        function val = normalize_val(obj,in, max, min)
+            val = (in - min)./max;
+        end
         function [success, block_features] = pickUpAndAnalyzeBlock(obj)
 
             previousAnalogVal = 0;
