@@ -19,11 +19,13 @@ classdef SLAM_Controller < handle
         branchChoice;
         hasBox;
         findingBox;
+        boxType;
         %Facing enum?
         MAX_SIZE
         MIN_SIZE
         MAX_HALL
         MIN_HALL
+        
     end
     properties (Constant = true)
         KP_RPM = 0.05;
@@ -52,6 +54,8 @@ classdef SLAM_Controller < handle
 
         HALL_EFFECT = 1;
         SERVO_ANALOG = 2;
+
+        SF_ULTRASON
     end
     methods
         function obj = SLAM_Controller(body)
@@ -70,6 +74,7 @@ classdef SLAM_Controller < handle
             obj.previousBranch = 0;
             obj.branchCheck = ones(1,4);
             obj.branchChoice = 1;
+            obj.boxType = nan;
         end
         function [posX, posY] = do_task(obj)
             switch(obj.state)
@@ -159,13 +164,30 @@ classdef SLAM_Controller < handle
                         % Do we have a box?
                         if(obj.hasBox)
                             % choose path based on type of box
-                            obj.MoveForward(2);
-                            obj.Turn90DegreeLeft();
-                            pause(2);
-                            obj.TurnToBranchX(1);
-                            obj.previousBranch = obj.currentBranch;
-                            obj.currentBranch = 5;
-                            obj.state = States.FollowLineForward;
+%                             obj.MoveForward(2);
+%                             obj.Turn90DegreeLeft();
+%                             pause(2);
+%                             obj.TurnToBranchX(1);
+%                             obj.previousBranch = obj.currentBranch;
+%                             obj.currentBranch = 5;
+%                             obj.state = States.FollowLineForward;
+                            if(obj.boxType == 0)
+                                obj.MoveForward(2);
+                                obj.Turn90DegreeLeft();
+                                pause(2);
+                                obj.TurnToBranchX(2);
+                                obj.previousBranch = obj.currentBranch;
+                                obj.currentBranch = 5;
+                                obj.state = States.FollowLineForward;
+                            else
+                                obj.MoveForward(2);
+                                obj.Turn90DegreeLeft();
+                                pause(2);
+                                obj.TurnToBranchX(1);
+                                obj.previousBranch = obj.currentBranch;
+                                obj.currentBranch = 6;
+                                obj.state = States.FollowLineForward;
+                            end
                         % Else
                         else
                             % choose one of the branches from 1 to 4
@@ -180,7 +202,7 @@ classdef SLAM_Controller < handle
                             obj.previousBranch = obj.currentBranch;
                             obj.currentBranch = obj.branchChoice;
                             obj.branchChoice = obj.branchChoice + 1;
-                            if(obj.branchChoice == 5)
+                            if(obj.branchChoice == 4)
                                 obj.branchChoice = 1;
                             end
                             
@@ -227,23 +249,30 @@ classdef SLAM_Controller < handle
                     ;
                 case States.GraspItem % Pd? control for grasping the object
                     
-                    disp("I picked a Box");
-                    obj.hasBox = true;
-                    obj.findingBox = false;
-                    obj.MoveForward(2);
-                    obj.state = States.GoBack;
-                    obj.previousState = States.GraspItem;
-                                        obj.body.startStream('analog');
-%                     success = false;
-%                     size = 0;
-%                     while(not(success))
-%                         obj.body.servo(obj.SERVO,0);
-%                         pause(2);
-%                         [success, block_features] = obj.pickUpAndAnalyzeBlock();
-%                     end
-%                     predicted_block_type = obj.classifier.predict(block_features);
+%                     disp("I picked a Box");
+%                     obj.hasBox = true;
+%                     obj.findingBox = false;
+%                     obj.MoveForward(2);
+%                     obj.state = States.GoBack;
+%                     obj.previousState = States.GraspItem;
+                    obj.body.startStream('analog');
+                    success = false;
+                    size = 0;
+                    while(not(success))
+                        obj.body.servo(obj.SERVO,0);
+                        pause(2);
+                        [success, block_features] = obj.pickUpAndAnalyzeBlock();
+                        if(success == false)
+                            distanceDetected = obj.body.ultrasonicPulse() * 0.0172;
+                            if(distanceDetected > (obj.SF_ULTRASON * 5 * 2.54))
+                                obj.branchCheck(obj.currentBranch) = 0;
+                            end
+                        end
+                    end
+                    predicted_block_type = obj.classifier.predict(block_features);
+                    obj.boxType = predicted_block_type;
 %                     obj.changeState(predicted_block_type);
-%                     pause(0.1);
+                    pause(0.1);
                     
                     ;
                 case States.TurnAround % Pd? control for rotating the robot a complete 180
