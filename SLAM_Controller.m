@@ -17,6 +17,7 @@ classdef SLAM_Controller < handle
         previousBranch;
         branchCheck;
         branchChoice;
+        branchFailed;
         hasBox;
         findingBox;
         boxType;
@@ -74,6 +75,7 @@ classdef SLAM_Controller < handle
             obj.previousBranch = 0;
             obj.branchCheck = ones(1,4);
             obj.branchChoice = 1;
+            obj.branchFailed = false;%
             obj.boxType = nan;
             obj.body.servo(obj.SERVO,0);
         end
@@ -190,6 +192,9 @@ classdef SLAM_Controller < handle
                                 obj.currentBranch = 6;
                                 obj.state = States.FollowLineForward;
                             end
+                        elseif(obj.branchFailed)%
+                            obj.branchFailed = false;%
+                            obj.state = States.TurnAround;%
                         % Else
                         else
                             % choose one of the branches from 1 to 4
@@ -215,10 +220,14 @@ classdef SLAM_Controller < handle
                     elseif(obj.currentBranch >= 1 && obj.currentBranch <= 4)
                         % If we are trying to find box
                         if(obj.findingBox)
-                            % go to find box state
-                            obj.state = States.GraspItem; % graspItem incomplete needs to move forward
-                            % in grasp item we need to set findingBox to
-                            % false
+                            if(obj.branchFailed == true)%
+                                obj.ReturnToZero();%
+                            else
+                                % go to find box state
+                                obj.state = States.GraspItem; % graspItem incomplete needs to move forward
+                                % in grasp item we need to set findingBox to
+                                % false
+                            end
                         % Else
                         else
                             obj.ReturnToZero();
@@ -258,22 +267,31 @@ classdef SLAM_Controller < handle
                     obj.body.startStream('analog');
                     success = false;
                     size = 0;
+                    attempts = 3;%
+                    currentAttempts = 0;%
                     while(not(success))
                         obj.body.servo(obj.SERVO,0);
                         pause(2);
                         [success, block_features] = obj.pickUpAndAnalyzeBlock();
-                        if(success == false)
-                            distanceDetected = obj.body.ultrasonicPulse() * 0.0172;
-                            if(distanceDetected > (obj.SF_ULTRASON * 5 * 2.54))
-                                obj.branchCheck(obj.currentBranch) = 0;
-                            end
+                        if(success == false)%
+                              currentAttempts = currentAttempts +1;%
+                              if(currentAttempts == attempts)%
+                                    obj.branchCheck(obj.currentBranch) = 0;%
+                                    obj.branchFailed = true;%
+                              end%
+%                             distanceDetected = obj.body.ultrasonicPulse() * 0.0172;
+%                             if(distanceDetected > (obj.SF_ULTRASON * 5 * 2.54))
+%                                 obj.branchCheck(obj.currentBranch) = 0;
+%                             end
                         end
                     end
-                    predicted_block_type = obj.classifier.predict(block_features');
-                    obj.boxType = predicted_block_type;
-                    obj.hasBox = true;
-                    obj.findingBox = false;
-                    display(obj.boxType);
+                    if(~obj.branchFailed)
+                        predicted_block_type = obj.classifier.predict(block_features');
+                        obj.boxType = predicted_block_type;
+                        obj.hasBox = true;
+                        obj.findingBox = false;
+                        display(obj.boxType);
+                    end
 %                     obj.changeState(predicted_block_type);
                     pause(0.1);
                     ;
