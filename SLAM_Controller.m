@@ -75,6 +75,7 @@ classdef SLAM_Controller < handle
             obj.branchCheck = ones(1,4);
             obj.branchChoice = 1;
             obj.boxType = nan;
+            obj.body.servo(obj.SERVO,0);
         end
         function [posX, posY] = do_task(obj)
             switch(obj.state)
@@ -82,7 +83,8 @@ classdef SLAM_Controller < handle
                     obj.previousState = States.StandBy;
                     obj.body.motor(obj.MOTOR_R, 0);
                     obj.body.motor(obj.MOTOR_L, 0);
-                    
+                    obj.body.servo(obj.SERVO,0);
+
                     obj.body.resetEncoder(1);
                     obj.body.resetEncoder(2);
                     
@@ -117,7 +119,7 @@ classdef SLAM_Controller < handle
                     
                     control_M1 = 0; control_M2 = 0;
                     error_IR = 0; prev_error_IR = 0;
-                    Threshold = 100;
+                    Threshold = 25;
                     tic;
                     while not(obj.isFork(ir_reading))
                         [error_IR, control_M1, control_M2] = obj.ir_PD_Controller(obj.normalize_IR_reading(ir_reading),prev_error_IR);
@@ -138,10 +140,10 @@ classdef SLAM_Controller < handle
                                     pause(0.0001);
                                 end
                                 pause(0.1);
-                                Threshold = 100;
+                                Threshold = 25;
                             end
                         else
-                            Threshold = 100;
+                            Threshold = 25;
                         end
                     end
                     
@@ -250,10 +252,8 @@ classdef SLAM_Controller < handle
                 case States.GraspItem % Pd? control for grasping the object
                     
 %                     disp("I picked a Box");
-%                     obj.hasBox = true;
-%                     obj.findingBox = false;
-%                     obj.MoveForward(2);
-%                     obj.state = States.GoBack;
+                    obj.MoveForward(2);
+                    obj.state = States.GoBack;
 %                     obj.previousState = States.GraspItem;
                     obj.body.startStream('analog');
                     success = false;
@@ -269,11 +269,13 @@ classdef SLAM_Controller < handle
                             end
                         end
                     end
-                    predicted_block_type = obj.classifier.predict(block_features);
+                    predicted_block_type = obj.classifier.predict(block_features');
                     obj.boxType = predicted_block_type;
+                    obj.hasBox = true;
+                    obj.findingBox = false;
+                    display(obj.boxType);
 %                     obj.changeState(predicted_block_type);
                     pause(0.1);
-                    
                     ;
                 case States.TurnAround % Pd? control for rotating the robot a complete 180
                     disp("Turning around \n");
@@ -299,6 +301,7 @@ classdef SLAM_Controller < handle
                     obj.hasBox = false;
                     obj.findingBox = true;
                     obj.MoveForward(2);
+                    obj.body.servo(4,0);
                     obj.state = States.GoBack;
                     ;
                 case States.BeFree % Pd? control for
@@ -363,15 +366,16 @@ classdef SLAM_Controller < handle
             
             while(currentCount < count)
                 values = obj.body.readReflectance();
+                obj.stopMotors();
+                pause(0.01);
+                obj.body.motor(obj.MOTOR_R, round(obj.TARGET_RPM * obj.R_MOTOR_SF));
+                obj.body.motor(obj.MOTOR_L, round(-obj.TARGET_RPM));
                 if(obj.line_in_sight(values,[2,3])) % this will probably need padding
                     currentCount = currentCount + 1;
                     if(currentCount == count)
                         break;
                     end
-                    obj.stopMotors();
-                    pause(0.1);
-                    obj.body.motor(obj.MOTOR_R, round(obj.TARGET_RPM * obj.R_MOTOR_SF));
-                    obj.body.motor(obj.MOTOR_L, round(-obj.TARGET_RPM));
+                    pause(0.2);
                 end
             end
             obj.stopMotors();
@@ -543,7 +547,7 @@ classdef SLAM_Controller < handle
             pause(0.01);
 
             block_features(5) = obj.normalize_val(size, obj.MAX_SIZE, obj.MIN_SIZE);
-            block_features(4:2) = obj.normalize_val([r,g,b]',255,0);
+            block_features(2:4) = obj.normalize_val([r,g,b]',255,0);
             block_features(1) = obj.normalize_val(AnalogData(obj.HALL_EFFECT), obj.MAX_HALL, obj.MIN_HALL);
         end
         function [curr_error_IR, control_M1, control_M2] = ir_PD_Controller(obj, ir_normalized, prev_error_IR)
@@ -583,14 +587,14 @@ classdef SLAM_Controller < handle
             max_avg = mean(obj.max_ir_reading);
             bool = false;
             for i = length(sensors)
-                bool = bool || obj.valThresholdG(reading(sensors(i)),max_avg,(3/4).*max_avg);
+                bool = bool || obj.valThresholdG(reading(sensors(i)),max_avg,(1/4).*max_avg);
             end
         end
         function bool = line_in_sight(obj, reading, sensors)
             max_avg = mean(obj.max_ir_reading);
             bool = true;
             for i = length(sensors)
-                bool = bool && obj.valThresholdG(reading(sensors(i)),max_avg,(3/4).*max_avg);
+                bool = bool && obj.valThresholdG(reading(sensors(i)),max_avg,(1/4).*max_avg);
             end
         end
         function stopMotors(obj)

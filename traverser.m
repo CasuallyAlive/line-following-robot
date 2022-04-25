@@ -20,7 +20,7 @@ controller = SLAM_Controller(r);
 controller.classifier = mdl_svm;
 controller.MAX_SIZE = CONSTS(1);
 controller.MIN_SIZE = CONSTS(2);
-controler.MAX_HALL = CONSTS(3);
+controller.MAX_HALL = CONSTS(3);
 controller.MIN_HALL = CONSTS(4);
 %% Main loop for SLAM traversal
 
