@@ -38,7 +38,7 @@ classdef MKR_MotorCarrier < handle
             plotDelayMax; available_streams; streamToDraw; digitalPinBuffer; analogPinBuffer;...
             digitalPinsAvailable; analogPinsAvailable; a1; a2; a3; a4; i1; i2; i3;...
             animation_t; graphBuffer; sizeOfRecordedDataBuffer; RecordedDataBuffer;...
-            RDB_Toggle; RDB_Index; channelToDraw; red; green; blue; irBuffer; encoderPos; encoderVel;
+            RDB_Toggle; RDB_Index; channelToDraw; red; green; blue; irBuffer; encoderPos; encoderVel; ultrasonicBuffer;
 
     end
 
@@ -72,6 +72,7 @@ classdef MKR_MotorCarrier < handle
             obj.graphBuffer = zeros(7,50);
             obj.sizeOfRecordedDataBuffer = 100000;
             obj.RecordedDataBuffer = zeros(7,obj.sizeOfRecordedDataBuffer);
+            obj.ultrasonicBuffer = [0];
             obj.RDB_Toggle = 0;
             obj.RDB_Index = 1;
             obj.red = 0;
@@ -413,16 +414,11 @@ classdef MKR_MotorCarrier < handle
 
         function [val1,val2] = readEncoderVel(obj)
             sendOverUDP(obj,17,1,1);
-            pause(0.07);
+            pause(0.05);
             %disp(obj.encoderVal)
-            try
-                val1 = str2num(obj.encoderVel(1));
-                val2 = str2num(obj.encoderVel(2));
-            catch
-                disp('Errored out, last data received was:'+obj.encoderVel(1)+', '+obj.encoderVel(2))                
-            end
+            val1 = str2num(obj.encoderVel(1));
+            val2 = str2num(obj.encoderVel(2));
         end
-        
         function livePlot(obj, streamType, varargin)
             % LIVEPLOT(streamType)  displays a live plot of all the values
             % read in on the streamType stream.
