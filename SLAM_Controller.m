@@ -74,7 +74,7 @@ classdef SLAM_Controller < handle
             obj.currentBranch = 0;
             obj.previousBranch = 0;
             obj.branchCheck = ones(1,4);
-            obj.branchChoice = 4;1
+            obj.branchChoice = 1;
             obj.branchFailed = false;%
             obj.boxType = nan;
             obj.body.servo(obj.SERVO,0);
@@ -176,7 +176,7 @@ classdef SLAM_Controller < handle
 %                             obj.currentBranch = 5;
 %                             obj.state = States.FollowLineForward;
                             if(obj.boxType == 0)
-                                obj.MoveForward(2.5);
+                                obj.MoveForward(1.8);
                                 obj.Turn90DegreeLeft();
                                 pause(2);
                                 obj.TurnToBranchX(2);
@@ -184,7 +184,7 @@ classdef SLAM_Controller < handle
                                 obj.currentBranch = 6;
                                 obj.state = States.FollowLineForward;
                             else
-                                obj.MoveForward(2.5);
+                                obj.MoveForward(1.8);
                                 obj.Turn90DegreeLeft();
                                 pause(2);
                                 obj.TurnToBranchX(1);
@@ -200,7 +200,7 @@ classdef SLAM_Controller < handle
                         else
                             % choose one of the branches from 1 to 4
                             % Move and turn to that branch
-                            obj.MoveForward(2.3);
+                            obj.MoveForward(1.8);
                             if(obj.branchCheck(obj.branchChoice) ~= 1)
                                 obj.branchChoice = obj.branchChoice + 1;
                             end
@@ -276,7 +276,7 @@ classdef SLAM_Controller < handle
                     currentAttempts = 0;%
                     while(not(success))
                         obj.body.servo(obj.SERVO,0);
-                        pause(2);
+                        pause(5);
                         [success, block_features] = obj.pickUpAndAnalyzeBlock();
                         if(success == false)%
                               currentAttempts = currentAttempts +1;%
@@ -642,14 +642,14 @@ classdef SLAM_Controller < handle
             max_avg = mean(obj.max_ir_reading);
             bool = false;
             for i = length(sensors)
-                bool = bool || obj.valThresholdG(reading(sensors(i)),max_avg,(2/5).*max_avg);
+                bool = bool || obj.valThresholdG(reading(sensors(i)),max_avg,(1/2).*max_avg);
             end
         end
         function bool = line_in_sight(obj, reading, sensors)
             max_avg = mean(obj.max_ir_reading);
             bool = true;
             for i = length(sensors)
-                bool = bool && obj.valThresholdG(reading(sensors(i)),max_avg,(2/5).*max_avg);
+                bool = bool && obj.valThresholdG(reading(sensors(i)),max_avg,(1/2).*max_avg);
             end
         end
         function bool = line_not_in_sight(obj, reading, sensors)
