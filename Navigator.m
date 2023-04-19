@@ -1,4 +1,4 @@
-classdef SLAM_Controller < handle
+classdef Navigator < handle
     properties
         state; % the state of the robot.
         previousState;
@@ -59,7 +59,7 @@ classdef SLAM_Controller < handle
         SF_ULTRASON
     end
     methods
-        function obj = SLAM_Controller(body)
+        function obj = Navigator(body)
             obj.state = States.StandBy;
             obj.previousState = States.StandBy;
             %obj.classifier = classifier;
